@@ -189,7 +189,8 @@ export const agentTextCompletedEventSchema = eventSchema(
   z
     .object({
       ...responseCorrelationShape,
-      text: z.string()
+      text: z.string(),
+      safetyRefusal: z.boolean().optional()
     })
     .strict()
 )
@@ -265,6 +266,9 @@ export const turnCompletedEventSchema = eventSchema(
       responseId: responseIdSchema.optional(),
       turnNumber: z.number().int().positive(),
       durationMs: z.number().nonnegative(),
+      model: z.string().min(1).optional(),
+      providerRequestIds: z.array(z.string().min(1)).optional(),
+      safetyRefusal: z.boolean().optional(),
       usage: z
         .object({
           inputTokens: z.number().int().nonnegative(),
@@ -282,8 +286,10 @@ export const turnCancelledEventSchema = eventSchema(
   z
     .object({
       requestId: requestIdSchema.optional(),
+      responseId: responseIdSchema.optional(),
       turnNumber: z.number().int().positive(),
-      reason: z.string().min(1)
+      reason: z.string().min(1),
+      providerRequestIds: z.array(z.string().min(1)).optional()
     })
     .strict()
 )
@@ -293,10 +299,13 @@ export const loopFailedEventSchema = eventSchema(
   z
     .object({
       requestId: requestIdSchema.optional(),
+      responseId: responseIdSchema.optional(),
       turnNumber: z.number().int().nonnegative(),
       code: z.string().min(1),
       message: z.string().min(1),
-      recoverable: z.boolean()
+      recoverable: z.boolean(),
+      model: z.string().min(1).optional(),
+      providerRequestIds: z.array(z.string().min(1)).optional()
     })
     .strict()
 )
