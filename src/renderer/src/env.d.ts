@@ -1,9 +1,3 @@
-export {}
+/// <reference types="vite/client" />
 
-declare global {
-  interface Window {
-    intrusiveThoughts?: {
-      getVersion(): string
-    }
-  }
-}
+export {}
