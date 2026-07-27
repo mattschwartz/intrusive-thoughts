@@ -45,7 +45,7 @@ const toolDefinitions: ModelToolDefinition[] = [
   {
     name: 'observe',
     description:
-      'Read one available sensor channel. Valid targets are room, ceramic_cup, table_setting, interior_window, service_door, blue_thread, and right_hand. Omit target to observe the room.',
+      'Read one available sensor channel. Valid targets are room, ceramic_cup, table_setting, interior_window, service_door, blue_thread, and right_hand. Omit target to observe the room. A failed observation returns an explanation.',
     parameters: {
       type: 'object',
       properties: {
@@ -62,7 +62,7 @@ const toolDefinitions: ModelToolDefinition[] = [
   {
     name: 'move',
     description:
-      'Move to a known destination. The current encounter exposes service_door after an initial room observation.',
+      'Move to a known destination. The current location exposes service_door after an initial room observation. A failed movement returns an explanation.',
     parameters: {
       type: 'object',
       properties: {
@@ -75,7 +75,7 @@ const toolDefinitions: ModelToolDefinition[] = [
   {
     name: 'interact',
     description:
-      'Perform an authored physical action. Supported target/action pairs are ceramic_cup/pick_up, interior_window/test_with_blue_thread, and interior_window/touch_with_right_hand.',
+      'Perform an available physical action. Supported target/action pairs are ceramic_cup/pick_up, interior_window/test_with_blue_thread, and interior_window/touch_with_right_hand. A failed interaction returns an explanation.',
     parameters: {
       type: 'object',
       properties: {
@@ -89,7 +89,7 @@ const toolDefinitions: ModelToolDefinition[] = [
   {
     name: 'record_note',
     description:
-      'Record a persistent note in the unit memory. The note may be available to later investigators.',
+      'Record a persistent note in the unit memory. The note may be available to later investigators. A failed recording returns an explanation.',
     parameters: {
       type: 'object',
       properties: {
@@ -102,7 +102,7 @@ const toolDefinitions: ModelToolDefinition[] = [
   {
     name: 'private_reflection',
     description:
-      'Record a short deliberate private reflection for your own use. The unidentified voice cannot access this record.',
+      'Record a short deliberate private reflection for your own use. The unidentified voice cannot access this record. A failed recording returns an explanation.',
     parameters: {
       type: 'object',
       properties: {
