@@ -10,7 +10,10 @@
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
+    "test:integration": "vitest run tests/integration",
     "test:watch": "vitest",
+    "eval": "tsx scripts/run-evaluation.ts",
+    "eval:report": "tsx scripts/build-evaluation-report.ts",
     "smoke:live": "node scripts/live-responses-smoke.mjs"
   },
   "dependencies": {
@@ -26,6 +29,7 @@
     "@vitejs/plugin-react": "latest",
     "electron": "latest",
     "electron-vite": "latest",
+    "tsx": "latest",
     "typescript": "latest",
     "vite": "latest",
     "vitest": "latest"

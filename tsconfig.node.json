@@ -20,6 +20,8 @@
     "src/main/**/*.ts",
     "src/preload/**/*.ts",
     "src/shared/**/*.ts",
+    "evaluation/**/*.ts",
+    "scripts/**/*.ts",
     "tests/**/*.ts"
   ]
 }
