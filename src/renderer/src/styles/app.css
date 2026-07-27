@@ -1,0 +1,90 @@
+:root {
+  color: #d5ddd7;
+  background: #080a09;
+  font-family: "Cascadia Mono", "Consolas", monospace;
+  font-synthesis: none;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-width: 320px;
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+}
+
+.prototype-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  background:
+    linear-gradient(rgba(137, 255, 176, 0.025) 1px, transparent 1px),
+    #080a09;
+  background-size: 100% 4px;
+}
+
+.status-panel {
+  width: min(48rem, 100%);
+  border: 1px solid #304138;
+  padding: clamp(1.5rem, 5vw, 4rem);
+  box-shadow: 0 0 4rem rgba(83, 217, 128, 0.05);
+}
+
+.eyebrow {
+  margin: 0 0 1.5rem;
+  color: #72a482;
+  font-size: 0.75rem;
+  letter-spacing: 0.18em;
+}
+
+h1 {
+  max-width: 14ch;
+  margin: 0;
+  color: #edf4ef;
+  font-size: clamp(2rem, 6vw, 4.75rem);
+  font-weight: 500;
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+}
+
+.runtime-status {
+  margin: 2rem 0;
+  color: #aab5ad;
+  font-size: 1rem;
+}
+
+.bridge-status {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: #8f9b93;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.status-light {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+}
+
+.status-light.online {
+  background: #78e99d;
+  box-shadow: 0 0 0.7rem rgba(120, 233, 157, 0.8);
+}
+
+.status-light.offline {
+  background: #cf5e5e;
+  box-shadow: 0 0 0.7rem rgba(207, 94, 94, 0.8);
+}
