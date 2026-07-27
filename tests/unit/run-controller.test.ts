@@ -224,7 +224,7 @@ describe('RunController', () => {
     expect(second.runId).not.toBe(first.runId)
 
     const replayStart = events.length
-    await controller.loadReplay(first.runId)
+    const session = await controller.loadReplay(first.runId)
 
     expect(firstGateway.requests).toHaveLength(firstRequestCount)
     expect(secondGateway.requests).toHaveLength(0)
@@ -232,6 +232,11 @@ describe('RunController', () => {
     expect(events.slice(replayStart).map(({ type }) => type)).toContain(
       'replay.reset'
     )
+    expect(events.at(-1)?.type).toBe('replay.reset')
+
+    for (let position = 0; position < session.eventCount; position += 1) {
+      controller.controlReplay({ runId: first.runId, action: 'step' })
+    }
     expect(events.at(-1)).toEqual({
       type: 'replay.complete',
       runId: first.runId

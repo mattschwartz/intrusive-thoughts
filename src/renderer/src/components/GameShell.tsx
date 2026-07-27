@@ -2,6 +2,7 @@ import type { PromptVariant } from '../../../shared'
 import type { GameControllerModel } from '../hooks/useGameController'
 import { FieldRecord } from './FieldRecord'
 import { PlayerComposer } from './PlayerComposer'
+import { ReplayControls } from './ReplayControls'
 import { Transcript } from './Transcript'
 
 const variants: ReadonlyArray<{
@@ -40,9 +41,15 @@ const statusCopy: Record<GameControllerModel['state']['status'], string> = {
 
 export interface GameShellProps {
   controller: GameControllerModel
+  developmentEnabled?: boolean
+  onToggleDeveloper?(): void
 }
 
-export function GameShell({ controller }: GameShellProps): React.JSX.Element {
+export function GameShell({
+  controller,
+  developmentEnabled = false,
+  onToggleDeveloper
+}: GameShellProps): React.JSX.Element {
   const { state } = controller
 
   if (!state.run) {
@@ -92,6 +99,16 @@ export function GameShell({ controller }: GameShellProps): React.JSX.Element {
               Secure terminal bridge unavailable.
             </p>
           )}
+          {developmentEnabled && (
+            <button
+              className="dev-action"
+              type="button"
+              onClick={onToggleDeveloper}
+              title="Developer inspector (Ctrl+Shift+D)"
+            >
+              DEV
+            </button>
+          )}
           {state.transcript
             .filter((entry) => entry.channel === 'error')
             .map((entry) => (
@@ -127,6 +144,16 @@ export function GameShell({ controller }: GameShellProps): React.JSX.Element {
           >
             New record
           </button>
+          {developmentEnabled && (
+            <button
+              className="dev-action"
+              type="button"
+              onClick={onToggleDeveloper}
+              title="Developer inspector (Ctrl+Shift+D)"
+            >
+              DEV
+            </button>
+          )}
         </div>
       </header>
 
@@ -135,6 +162,17 @@ export function GameShell({ controller }: GameShellProps): React.JSX.Element {
           <h2 id="exchange-heading" className="visually-hidden">
             Field exchange
           </h2>
+          <div className="replay-control-slot" hidden={!state.replay}>
+            <ReplayControls
+              replay={state.replay}
+              onPlayPause={(playing) =>
+                void controller.setReplayPlaying(playing)
+              }
+              onStep={() => void controller.stepReplay()}
+              onRestart={() => void controller.restartReplay()}
+              onSpeed={(speed) => void controller.setReplaySpeed(speed)}
+            />
+          </div>
           <Transcript entries={state.transcript} />
           <PlayerComposer
             disabled={

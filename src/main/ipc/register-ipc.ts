@@ -8,11 +8,13 @@ import type { z } from 'zod'
 import {
   cancelTurnInputSchema,
   developerSnapshotInputSchema,
+  developerInspectionInputSchema,
   exportRunInputSchema,
   getSnapshotInputSchema,
   ipcChannels,
   listStoredRunsInputSchema,
   loadReplayInputSchema,
+  replayControlInputSchema,
   resetRunInputSchema,
   startRunInputSchema,
   submitPlayerMessageInputSchema,
@@ -151,6 +153,9 @@ export function registerIpc(options: RegisterIpcOptions): () => void {
   handle(ipcChannels.loadReplay, loadReplayInputSchema, (input) =>
     options.manager.loadReplay(input)
   )
+  handle(ipcChannels.controlReplay, replayControlInputSchema, (input) =>
+    options.manager.controlReplay(input)
+  )
   handle(ipcChannels.exportRun, exportRunInputSchema, (input) =>
     options.manager.exportRun(input)
   )
@@ -158,6 +163,11 @@ export function registerIpc(options: RegisterIpcOptions): () => void {
     ipcChannels.getDeveloperSnapshot,
     developerSnapshotInputSchema,
     (input) => options.manager.getDeveloperSnapshot(input)
+  )
+  handle(
+    ipcChannels.getDeveloperInspection,
+    developerInspectionInputSchema,
+    (input) => options.manager.getDeveloperInspection(input)
   )
 
   const unsubscribe = options.eventBus.subscribe((event: RendererEvent) => {

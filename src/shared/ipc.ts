@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+import { knownGameEventSchema } from './events'
 import { developerSnapshotSchema, playerSceneViewSchema, promptVariantSchema, runStatusSchema } from './state'
 import { runIdSchema, turnIdSchema } from './ids'
 import { gameToolNameSchema } from './tools'
@@ -15,8 +16,10 @@ export const ipcChannels = {
   subscribe: 'intrusive-thoughts:renderer-event',
   listRuns: 'intrusive-thoughts:list-runs',
   loadReplay: 'intrusive-thoughts:load-replay',
+  controlReplay: 'intrusive-thoughts:control-replay',
   exportRun: 'intrusive-thoughts:export-run',
-  getDeveloperSnapshot: 'intrusive-thoughts:get-developer-snapshot'
+  getDeveloperSnapshot: 'intrusive-thoughts:get-developer-snapshot',
+  getDeveloperInspection: 'intrusive-thoughts:get-developer-inspection'
 } as const
 
 export const startRunInputSchema = z
@@ -76,10 +79,42 @@ export const loadReplayInputSchema = z
   .strict()
 export type LoadReplayInput = z.infer<typeof loadReplayInputSchema>
 
+export const replaySpeedSchema = z.union([
+  z.literal(0.5),
+  z.literal(1),
+  z.literal(2)
+])
+export type ReplaySpeed = z.infer<typeof replaySpeedSchema>
+
+export const replayControlInputSchema = z.discriminatedUnion('action', [
+  z.object({ runId: runIdSchema, action: z.literal('step') }).strict(),
+  z.object({ runId: runIdSchema, action: z.literal('play') }).strict(),
+  z.object({ runId: runIdSchema, action: z.literal('pause') }).strict(),
+  z.object({ runId: runIdSchema, action: z.literal('restart') }).strict(),
+  z
+    .object({
+      runId: runIdSchema,
+      action: z.literal('speed'),
+      speed: replaySpeedSchema
+    })
+    .strict()
+])
+export type ReplayControlInput = z.infer<typeof replayControlInputSchema>
+
+export const replaySessionSchema = z
+  .object({
+    runId: runIdSchema,
+    eventCount: z.number().int().nonnegative(),
+    position: z.number().int().nonnegative(),
+    speed: replaySpeedSchema,
+    playbackStatus: z.enum(['ready', 'playing', 'paused', 'complete'])
+  })
+  .strict()
+export type ReplaySession = z.infer<typeof replaySessionSchema>
+
 export const exportRunInputSchema = z
   .object({
     runId: runIdSchema,
-    destination: z.string().min(1).optional(),
     allowOverwrite: z.boolean().default(false)
   })
   .strict()
@@ -91,6 +126,9 @@ export const developerSnapshotInputSchema = z
   })
   .strict()
 export type DeveloperSnapshotInput = z.infer<typeof developerSnapshotInputSchema>
+
+export const developerInspectionInputSchema = developerSnapshotInputSchema
+export type DeveloperInspectionInput = DeveloperSnapshotInput
 
 export const publicRunInfoSchema = z
   .object({
@@ -116,10 +154,21 @@ export const storedRunSummarySchema = publicRunInfoSchema
     updatedAt: z.string().datetime({ offset: true }),
     scenarioVersion: z.string().min(1),
     model: z.string().min(1),
-    lastEventSequence: z.number().int().nonnegative()
+    lastEventSequence: z.number().int().nonnegative(),
+    turnCount: z.number().int().nonnegative(),
+    eventCount: z.number().int().nonnegative()
   })
   .strict()
 export type StoredRunSummary = z.infer<typeof storedRunSummarySchema>
+
+export const developerInspectionSchema = z
+  .object({
+    run: storedRunSummarySchema,
+    snapshot: developerSnapshotSchema,
+    events: z.array(knownGameEventSchema)
+  })
+  .strict()
+export type DeveloperInspection = z.infer<typeof developerInspectionSchema>
 
 export const exportResultSchema = z
   .object({
@@ -248,8 +297,10 @@ export interface IntrusiveThoughtsAPI {
   resetRun(input: ResetRunInput): Promise<PublicRunInfo>
   getSnapshot(input: GetSnapshotInput): Promise<PlayerSnapshot>
   listRuns(): Promise<StoredRunSummary[]>
-  loadReplay(input: LoadReplayInput): Promise<void>
+  loadReplay(input: LoadReplayInput): Promise<ReplaySession>
+  controlReplay(input: ReplayControlInput): Promise<ReplaySession>
   exportRun(input: ExportRunInput): Promise<ExportResult>
   getDeveloperSnapshot(input: DeveloperSnapshotInput): Promise<z.infer<typeof developerSnapshotSchema>>
+  getDeveloperInspection(input: DeveloperInspectionInput): Promise<DeveloperInspection>
   subscribe(listener: (event: RendererEvent) => void): () => void
 }

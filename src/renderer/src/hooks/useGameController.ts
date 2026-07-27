@@ -7,6 +7,7 @@ import {
   type PlayerSceneView,
   type PromptVariant,
   type PublicRunInfo,
+  type ReplaySession,
   type RendererEvent
 } from '../../../shared'
 
@@ -36,6 +37,21 @@ export interface TranscriptEntryState {
   label: string
 }
 
+export type ReplayPlaybackStatus =
+  | 'loading'
+  | 'ready'
+  | 'playing'
+  | 'paused'
+  | 'complete'
+
+export interface ReplayPlaybackState {
+  initialScene: PlayerSceneView
+  eventCount: number
+  position: number
+  speed: 0.5 | 1 | 2
+  playbackStatus: ReplayPlaybackStatus
+}
+
 export interface RendererGameState {
   selectedVariant: PromptVariant
   run?: PublicRunInfo
@@ -47,6 +63,7 @@ export interface RendererGameState {
   reducedMotion: boolean
   cancellationRequested: boolean
   completedAnnouncement: string
+  replay?: ReplayPlaybackState
 }
 
 export type RendererGameAction =
@@ -56,6 +73,7 @@ export type RendererGameAction =
   | { type: 'cancel.requested' }
   | { type: 'local.error'; message: string }
   | { type: 'motion.changed'; reduced: boolean }
+  | { type: 'replay.session'; session: ReplaySession }
 
 export const initialRendererGameState: RendererGameState = {
   selectedVariant: 'bare_embodiment',
@@ -138,7 +156,14 @@ function reduceRendererEvent(
       transcript: [],
       nextEntryNumber: 0,
       cancellationRequested: false,
-      completedAnnouncement: ''
+      completedAnnouncement: '',
+      replay: {
+        initialScene: event.snapshot.scene,
+        eventCount: state.replay?.eventCount ?? 0,
+        position: 0,
+        speed: state.replay?.speed ?? 1,
+        playbackStatus: 'loading'
+      }
     }
   }
 
@@ -270,10 +295,28 @@ function reduceRendererEvent(
       return {
         ...state,
         status: 'replaying',
-        completedAnnouncement: 'Playback complete.'
+        completedAnnouncement: 'Playback loaded.',
+        replay: state.replay
+          ? {
+              ...state.replay,
+              position: state.replay.eventCount,
+              playbackStatus: 'complete'
+            }
+          : undefined
       }
     case 'replay.event':
-      return state
+      return state.replay
+        ? {
+            ...state,
+            replay: {
+              ...state.replay,
+              position: Math.min(
+                state.replay.eventCount,
+                state.replay.position + 1
+              )
+            }
+          }
+        : state
   }
 }
 
@@ -298,7 +341,8 @@ export function rendererGameReducer(
         transcript: isNewRun ? [] : state.transcript,
         nextEntryNumber: isNewRun ? 0 : state.nextEntryNumber,
         cancellationRequested: isNewRun ? false : state.cancellationRequested,
-        completedAnnouncement: isNewRun ? '' : state.completedAnnouncement
+        completedAnnouncement: isNewRun ? '' : state.completedAnnouncement,
+        replay: isNewRun ? undefined : state.replay
       }
     }
     case 'renderer.event':
@@ -325,6 +369,19 @@ export function rendererGameReducer(
       }
     case 'motion.changed':
       return { ...state, reducedMotion: action.reduced }
+    case 'replay.session':
+      return state.replay
+        ? {
+            ...state,
+            replay: {
+              ...state.replay,
+              eventCount: action.session.eventCount,
+              position: action.session.position,
+              speed: action.session.speed,
+              playbackStatus: action.session.playbackStatus
+            }
+          }
+        : state
   }
 }
 
@@ -341,6 +398,11 @@ export interface GameControllerModel {
   submitMessage(text: string): void
   cancelTurn(): Promise<void>
   resetRun(): Promise<void>
+  loadReplay(runId: string): Promise<void>
+  stepReplay(): Promise<void>
+  restartReplay(): Promise<void>
+  setReplayPlaying(playing: boolean): Promise<void>
+  setReplaySpeed(speed: ReplayPlaybackState['speed']): Promise<void>
 }
 
 export function useGameController(
@@ -459,6 +521,62 @@ export function useGameController(
     }
   }, [api, hydrateSnapshot, state.run, state.selectedVariant, state.status])
 
+  const loadReplay = useCallback(
+    async (runId: string): Promise<void> => {
+      if (!api || state.status === 'running_turn') return
+      try {
+        const session = await api.loadReplay({ runId })
+        dispatch({ type: 'replay.session', session })
+      } catch (cause) {
+        dispatch({
+          type: 'local.error',
+          message: errorMessage(cause, 'The stored record could not be loaded.')
+        })
+        throw cause
+      }
+    },
+    [api, state.status]
+  )
+
+  const controlReplay = useCallback(
+    async (action: 'step' | 'play' | 'pause' | 'restart'): Promise<void> => {
+      if (!api || !state.run || state.status !== 'replaying') return
+      try {
+        const session = await api.controlReplay({
+          runId: state.run.runId,
+          action
+        })
+        dispatch({ type: 'replay.session', session })
+      } catch (cause) {
+        dispatch({
+          type: 'local.error',
+          message: errorMessage(cause, 'Playback control failed.')
+        })
+      }
+    },
+    [api, state.run, state.status]
+  )
+
+  const setReplaySpeed = useCallback(
+    async (speed: ReplayPlaybackState['speed']): Promise<void> => {
+      if (!api || !state.run || state.status !== 'replaying') return
+      try {
+        const session = await api.controlReplay({
+          runId: state.run.runId,
+          action: 'speed',
+          speed
+        })
+        dispatch({ type: 'replay.session', session })
+      } catch (cause) {
+        dispatch({
+          type: 'local.error',
+          message: errorMessage(cause, 'Playback speed could not be changed.')
+        })
+      }
+    },
+    [api, state.run, state.status]
+  )
+
   return useMemo(
     () => ({
       state,
@@ -469,8 +587,24 @@ export function useGameController(
       startRun,
       submitMessage,
       cancelTurn,
-      resetRun
+      resetRun,
+      loadReplay,
+      stepReplay: () => controlReplay('step'),
+      restartReplay: () => controlReplay('restart'),
+      setReplayPlaying: (playing: boolean) =>
+        controlReplay(playing ? 'play' : 'pause'),
+      setReplaySpeed
     }),
-    [api, cancelTurn, resetRun, startRun, state, submitMessage]
+    [
+      api,
+      cancelTurn,
+      controlReplay,
+      loadReplay,
+      resetRun,
+      setReplaySpeed,
+      startRun,
+      state,
+      submitMessage
+    ]
   )
 }

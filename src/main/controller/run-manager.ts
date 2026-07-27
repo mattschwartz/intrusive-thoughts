@@ -1,10 +1,12 @@
 import type {
   CancelTurnInput,
   DeveloperSnapshotInput,
+  DeveloperInspectionInput,
   ExportResult,
   ExportRunInput,
   GetSnapshotInput,
   LoadReplayInput,
+  ReplayControlInput,
   PlayerSnapshot,
   PublicRunInfo,
   ResetRunInput,
@@ -45,19 +47,27 @@ export class RunManager {
     return this.controller.listRuns()
   }
 
-  loadReplay(input: LoadReplayInput): Promise<void> {
+  loadReplay(input: LoadReplayInput) {
     return this.controller.loadReplay(input.runId)
+  }
+
+  controlReplay(input: ReplayControlInput) {
+    return this.controller.controlReplay(input)
   }
 
   exportRun(input: ExportRunInput): Promise<ExportResult> {
     return this.controller.exportRun(
       input.runId,
-      input.destination,
+      undefined,
       input.allowOverwrite
     )
   }
 
   getDeveloperSnapshot(input: DeveloperSnapshotInput) {
     return this.controller.getDeveloperSnapshot(input.runId)
+  }
+
+  getDeveloperInspection(input: DeveloperInspectionInput) {
+    return this.controller.getDeveloperInspection(input.runId)
   }
 }

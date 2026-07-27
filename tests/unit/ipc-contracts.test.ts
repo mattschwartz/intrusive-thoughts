@@ -57,9 +57,11 @@ function makeIpcHarness() {
     resetRun: vi.fn(async () => RUN),
     getSnapshot: vi.fn(),
     listRuns: vi.fn(async () => []),
-    loadReplay: vi.fn(async () => undefined),
+    loadReplay: vi.fn(),
+    controlReplay: vi.fn(),
     exportRun: vi.fn(),
-    getDeveloperSnapshot: vi.fn()
+    getDeveloperSnapshot: vi.fn(),
+    getDeveloperInspection: vi.fn()
   } as unknown as RunManager
   const eventBus = new RendererEventBus()
   const cleanup = registerIpc({
@@ -137,7 +139,7 @@ describe('IPC contracts', () => {
     harness.cleanup()
     harness.eventBus.emit({ type: 'loop.status', status: 'no_run' })
     expect(harness.sent).toHaveLength(1)
-    expect(harness.removed).toHaveLength(9)
+    expect(harness.removed).toHaveLength(11)
   })
 
   it('exposes only the typed API and removes the exact subscription listener', async () => {
@@ -156,7 +158,9 @@ describe('IPC contracts', () => {
 
     expect(Object.keys(api).sort()).toEqual([
       'cancelTurn',
+      'controlReplay',
       'exportRun',
+      'getDeveloperInspection',
       'getDeveloperSnapshot',
       'getSnapshot',
       'listRuns',

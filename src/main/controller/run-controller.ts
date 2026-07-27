@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import {
   developerSnapshotSchema,
+  developerInspectionSchema,
   gameToolNameSchema,
   gameSnapshotSchema,
   knownGameEventSchema,
@@ -9,6 +10,7 @@ import {
   storedRunSummarySchema,
   type ControllerStatus,
   type DeveloperSnapshot,
+  type DeveloperInspection,
   type ExportResult,
   type GameSnapshot,
   type GameState,
@@ -17,6 +19,9 @@ import {
   type PromptVariant,
   type PublicRunInfo,
   type RendererEvent,
+  type ReplayControlInput,
+  type ReplaySession,
+  replaySessionSchema,
   type StoredRunSummary
 } from '../../shared'
 import { AgentLoop, type ModelGateway } from '../agent'
@@ -59,6 +64,12 @@ interface ActiveRun {
 interface ReplayRun {
   info: PublicRunInfo
   state: GameState
+  initialState: GameState
+  events: KnownGameEvent[]
+  position: number
+  speed: 0.5 | 1 | 2
+  playing: boolean
+  timer?: ReturnType<typeof setTimeout>
 }
 
 const TOOL_SUMMARIES: Record<string, string> = {
@@ -75,6 +86,38 @@ function publicMessage(error: unknown): string {
     return error.message
   }
   return 'The operation could not be completed.'
+}
+
+function redactDeveloperValue(
+  value: unknown,
+  secrets: readonly string[]
+): unknown {
+  if (typeof value === 'string') {
+    let text = value
+    for (const secret of secrets) {
+      if (secret) text = text.split(secret).join('[REDACTED]')
+    }
+    return text.replace(
+      /\b(sk-[A-Za-z0-9_-]{8,}|Bearer\s+[A-Za-z0-9._~+/=-]{8,})\b/gi,
+      '[REDACTED]'
+    )
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => redactDeveloperValue(item, secrets))
+  }
+  if (value === null || typeof value !== 'object') return value
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !/reasoning|encrypted[\s_.-]*content/i.test(key))
+      .map(([key, child]) => [
+        key,
+        /api[\s_.-]*key|authorization|access[\s_.-]*token|auth[\s_.-]*token|secret/i.test(
+          key
+        )
+          ? '[REDACTED]'
+          : redactDeveloperValue(child, secrets)
+      ])
+  )
 }
 
 export class RunController {
@@ -116,7 +159,7 @@ export class RunController {
       )
     }
 
-    this.replay = undefined
+    this.clearReplay()
     const gateway = this.gatewayFactory()
     const runId = this.createId()
     const createdAt = this.now()
@@ -266,7 +309,7 @@ export class RunController {
       await this.turnPromise.catch(() => undefined)
     }
     this.active = undefined
-    this.replay = undefined
+    this.clearReplay()
     this.turnAbort = undefined
     this.turnPromise = undefined
     this.setStatus('no_run')
@@ -298,12 +341,14 @@ export class RunController {
         updatedAt: run.updatedAt,
         scenarioVersion: run.scenarioVersion,
         model: run.model,
-        lastEventSequence: run.lastEventSequence
+        lastEventSequence: run.lastEventSequence,
+        turnCount: run.lastTurnNumber,
+        eventCount: run.lastEventSequence
       })
     )
   }
 
-  async loadReplay(runId: string): Promise<void> {
+  async loadReplay(runId: string): Promise<ReplaySession> {
     if (this.turnAbort && this.turnPromise) {
       this.turnAbort.abort(new Error('Turn cancelled before replay.'))
       await this.turnPromise.catch(() => undefined)
@@ -311,6 +356,7 @@ export class RunController {
     this.active = undefined
     this.turnAbort = undefined
     this.turnPromise = undefined
+    this.clearReplay()
 
     const replay = await this.store.replayRun(runId)
     const info = publicRunInfoSchema.parse({
@@ -319,8 +365,16 @@ export class RunController {
       status: replay.metadata.status,
       createdAt: replay.metadata.createdAt
     })
-    let state = replay.initialSnapshot.state
-    this.replay = { info, state }
+    const state = replay.initialSnapshot.state
+    this.replay = {
+      info,
+      state,
+      initialState: state,
+      events: replay.events,
+      position: 0,
+      speed: 1,
+      playing: false
+    }
     this.setStatus('replaying', runId)
     this.eventBus.emit({
       type: 'replay.reset',
@@ -332,21 +386,51 @@ export class RunController {
       }
     })
 
-    for (const event of replay.events) {
-      if (event.sequence > state.lastAppliedEventSequence) {
-        state = reduceGameEvent(state, event)
-      }
-      this.replay.state = state
-      this.eventBus.emit({
-        type: 'replay.event',
-        runId,
-        sequence: event.sequence
-      })
-      for (const rendererEvent of this.rendererEventsFor(event, state)) {
-        this.eventBus.emit(rendererEvent)
-      }
+    return this.makeReplaySession()
+  }
+
+  controlReplay(input: ReplayControlInput): ReplaySession {
+    const replay = this.requireReplay(input.runId)
+    switch (input.action) {
+      case 'step':
+        replay.playing = false
+        this.clearReplayTimer(replay)
+        this.advanceReplay(replay)
+        break
+      case 'play':
+        if (replay.position < replay.events.length) {
+          replay.playing = true
+          this.scheduleReplay(replay)
+        }
+        break
+      case 'pause':
+        replay.playing = false
+        this.clearReplayTimer(replay)
+        break
+      case 'restart':
+        replay.playing = false
+        this.clearReplayTimer(replay)
+        replay.position = 0
+        replay.state = replay.initialState
+        this.eventBus.emit({
+          type: 'replay.reset',
+          runId: replay.info.runId,
+          snapshot: {
+            run: replay.info,
+            turnNumber: replay.state.turnNumber,
+            scene: this.engine.projectForPlayer(replay.state)
+          }
+        })
+        break
+      case 'speed':
+        replay.speed = input.speed
+        if (replay.playing) {
+          this.clearReplayTimer(replay)
+          this.scheduleReplay(replay)
+        }
+        break
     }
-    this.eventBus.emit({ type: 'replay.complete', runId })
+    return this.makeReplaySession()
   }
 
   async exportRun(
@@ -378,11 +462,115 @@ export class RunController {
     })
   }
 
+  async getDeveloperInspection(runId: string): Promise<DeveloperInspection> {
+    const replay = await this.store.replayRun(runId)
+    const state = replay.finalState
+    const snapshot = developerSnapshotSchema.parse({
+      canonicalState: state,
+      agentWorld: this.engine.projectForAgent(state),
+      agentBody: this.engine.projectBodyForAgent(state),
+      playerScene: this.engine.projectForPlayer(state)
+    })
+    return developerInspectionSchema.parse({
+      run: {
+        runId: replay.metadata.runId,
+        promptVariant: replay.metadata.promptVariant,
+        status: replay.metadata.status,
+        createdAt: replay.metadata.createdAt,
+        updatedAt: replay.metadata.updatedAt,
+        scenarioVersion: replay.metadata.scenarioVersion,
+        model: replay.metadata.model,
+        lastEventSequence: replay.metadata.lastEventSequence,
+        turnCount: replay.metadata.lastTurnNumber,
+        eventCount: replay.events.length
+      },
+      snapshot,
+      events: redactDeveloperValue(replay.events, this.secretsToRedact)
+    })
+  }
+
   private requireActive(runId: string): ActiveRun {
     if (!this.active || this.active.info.runId !== runId) {
       throw new RunControllerError('run_not_active', 'The requested live run is not active.')
     }
     return this.active
+  }
+
+  private requireReplay(runId: string): ReplayRun {
+    if (!this.replay || this.replay.info.runId !== runId) {
+      throw new RunControllerError(
+        'replay_not_loaded',
+        'The requested replay is not loaded.'
+      )
+    }
+    return this.replay
+  }
+
+  private clearReplayTimer(replay: ReplayRun): void {
+    if (replay.timer !== undefined) clearTimeout(replay.timer)
+    replay.timer = undefined
+  }
+
+  private clearReplay(): void {
+    if (this.replay) this.clearReplayTimer(this.replay)
+    this.replay = undefined
+  }
+
+  private advanceReplay(replay: ReplayRun): void {
+    const event = replay.events[replay.position]
+    if (!event) {
+      replay.playing = false
+      this.clearReplayTimer(replay)
+      return
+    }
+    if (event.sequence > replay.state.lastAppliedEventSequence) {
+      replay.state = reduceGameEvent(replay.state, event)
+    }
+    replay.position += 1
+    this.eventBus.emit({
+      type: 'replay.event',
+      runId: replay.info.runId,
+      sequence: event.sequence
+    })
+    for (const rendererEvent of this.rendererEventsFor(event, replay.state)) {
+      this.eventBus.emit(rendererEvent)
+    }
+    if (replay.position >= replay.events.length) {
+      replay.playing = false
+      this.clearReplayTimer(replay)
+      this.eventBus.emit({ type: 'replay.complete', runId: replay.info.runId })
+    }
+  }
+
+  private scheduleReplay(replay: ReplayRun): void {
+    if (!replay.playing || replay.timer !== undefined) return
+    replay.timer = setTimeout(() => {
+      replay.timer = undefined
+      if (!replay.playing || this.replay !== replay) return
+      this.advanceReplay(replay)
+      this.scheduleReplay(replay)
+    }, Math.max(40, 240 / replay.speed))
+  }
+
+  private makeReplaySession(): ReplaySession {
+    const replay = this.replay
+    if (!replay) {
+      throw new RunControllerError('replay_not_loaded', 'No replay is loaded.')
+    }
+    return replaySessionSchema.parse({
+      runId: replay.info.runId,
+      eventCount: replay.events.length,
+      position: replay.position,
+      speed: replay.speed,
+      playbackStatus:
+        replay.position >= replay.events.length
+          ? 'complete'
+          : replay.playing
+            ? 'playing'
+            : replay.position === 0
+              ? 'ready'
+              : 'paused'
+    })
   }
 
   private setStatus(status: ControllerStatus, runId?: string): void {

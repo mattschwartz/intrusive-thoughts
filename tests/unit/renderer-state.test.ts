@@ -72,7 +72,12 @@ function controllerFor(state: RendererGameState): GameControllerModel {
     startRun: vi.fn(async () => undefined),
     submitMessage: vi.fn(),
     cancelTurn: vi.fn(async () => undefined),
-    resetRun: vi.fn(async () => undefined)
+    resetRun: vi.fn(async () => undefined),
+    loadReplay: vi.fn(async () => undefined),
+    stepReplay: vi.fn(async () => undefined),
+    restartReplay: vi.fn(async () => undefined),
+    setReplayPlaying: vi.fn(async () => undefined),
+    setReplaySpeed: vi.fn(async () => undefined)
   }
 }
 

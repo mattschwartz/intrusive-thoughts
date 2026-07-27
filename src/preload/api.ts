@@ -3,6 +3,8 @@ import { z } from 'zod'
 import {
   cancelTurnInputSchema,
   developerSnapshotInputSchema,
+  developerInspectionInputSchema,
+  developerInspectionSchema,
   developerSnapshotSchema,
   exportResultSchema,
   exportRunInputSchema,
@@ -10,6 +12,8 @@ import {
   ipcChannels,
   ipcErrorSchema,
   loadReplayInputSchema,
+  replayControlInputSchema,
+  replaySessionSchema,
   playerSnapshotSchema,
   publicRunInfoSchema,
   rendererEventSchema,
@@ -91,7 +95,14 @@ export function createIntrusiveThoughtsApi(
         {}
       ),
     loadReplay: (input) =>
-      invoke(ipcChannels.loadReplay, loadReplayInputSchema, z.undefined(), input),
+      invoke(ipcChannels.loadReplay, loadReplayInputSchema, replaySessionSchema, input),
+    controlReplay: (input) =>
+      invoke(
+        ipcChannels.controlReplay,
+        replayControlInputSchema,
+        replaySessionSchema,
+        input
+      ),
     exportRun: (input) =>
       invoke(
         ipcChannels.exportRun,
@@ -104,6 +115,13 @@ export function createIntrusiveThoughtsApi(
         ipcChannels.getDeveloperSnapshot,
         developerSnapshotInputSchema,
         developerSnapshotSchema,
+        input
+      ),
+    getDeveloperInspection: (input) =>
+      invoke(
+        ipcChannels.getDeveloperInspection,
+        developerInspectionInputSchema,
+        developerInspectionSchema,
         input
       ),
     subscribe(listener: (event: RendererEvent) => void): () => void {
