@@ -1,4 +1,5 @@
 import { createElement } from 'react'
+import { readFileSync } from 'node:fs'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -49,6 +50,11 @@ const SNAPSHOT: PlayerSnapshot = {
   scene: SCENE
 }
 
+const rendererStyles = readFileSync(
+  new URL('../../src/renderer/src/styles/app.css', import.meta.url),
+  'utf8'
+)
+
 function apply(
   state: RendererGameState,
   event: RendererEvent
@@ -82,6 +88,21 @@ function controllerFor(state: RendererGameState): GameControllerModel {
 }
 
 describe('renderer game state', () => {
+  it('pins transcript and composer to stable grid rows when replay controls are hidden', () => {
+    expect(rendererStyles).toMatch(
+      /\.exchange-panel\s*{[^}]*grid-template-areas:\s*"replay"\s*"transcript"\s*"composer"/s
+    )
+    expect(rendererStyles).toMatch(
+      /\.transcript\s*{[^}]*grid-area:\s*transcript/s
+    )
+    expect(rendererStyles).toMatch(
+      /\.composer\s*{[^}]*grid-area:\s*composer/s
+    )
+    expect(rendererStyles).toMatch(
+      /\.exchange-panel\s*{[^}]*overflow:\s*hidden/s
+    )
+  })
+
   it('starts on the neutral condition picker and changes the selected variant', () => {
     const markup = renderToStaticMarkup(
       createElement(GameShell, {
@@ -92,6 +113,8 @@ describe('renderer game state', () => {
     expect(markup).toContain('Baseline')
     expect(markup).toContain('Continuity')
     expect(markup).toContain('Persona')
+    expect(markup).toContain('Roleplayer')
+    expect(markup).toContain('Explicit in-character performance direction.')
     expect(initialRendererGameState.selectedVariant).toBe('bare_embodiment')
 
     const selected = rendererGameReducer(initialRendererGameState, {
@@ -99,6 +122,12 @@ describe('renderer game state', () => {
       variant: 'authored_character'
     })
     expect(selected.selectedVariant).toBe('authored_character')
+
+    const roleplayer = rendererGameReducer(selected, {
+      type: 'variant.selected',
+      variant: 'roleplayer'
+    })
+    expect(roleplayer.selectedVariant).toBe('roleplayer')
   })
 
   it('accepts the player message verbatim and accumulates deltas in one entry', () => {

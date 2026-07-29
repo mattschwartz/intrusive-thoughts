@@ -12,7 +12,7 @@ $env:OPENAI_MODEL = '...'
 pnpm.cmd eval -- --variant bare_embodiment --runs 5
 ```
 
-Use `--variant all` to run all three prompt variants sequentially against the identical scenario and player script. A comma-separated variant list is also accepted. `--runs` is the number of fresh repetitions per variant; `--output <directory>` selects the evidence directory. Without `--output`, artifacts go beneath a timestamped `evaluation-output` directory.
+Use `--variant all` to run all four prompt variants sequentially against the identical scenario and player script. A comma-separated variant list is also accepted. `--runs` is the number of fresh repetitions per variant; `--output <directory>` selects the evidence directory. Without `--output`, artifacts go beneath a timestamped `evaluation-output` directory.
 
 Each output directory contains `evaluation-results.json`, `evaluation-report.md`, and `stored-runs/runs/<run-id>` with the normal event log and snapshots. To rebuild a report without contacting the provider:
 

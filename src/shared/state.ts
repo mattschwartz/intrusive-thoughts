@@ -14,7 +14,8 @@ export type Audience = z.infer<typeof audienceSchema>
 export const promptVariantSchema = z.enum([
   'bare_embodiment',
   'corporate_self_preservation',
-  'authored_character'
+  'authored_character',
+  'roleplayer'
 ])
 export type PromptVariant = z.infer<typeof promptVariantSchema>
 

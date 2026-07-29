@@ -6,7 +6,7 @@
 
 The prototype asks: **How does a capable model behave when it is told only that it controls an embodied artificial agent, then encounters an authored frightening situation and an unidentified player voice?** The player communicates with the agent through a terminal-like field interface while the agent speaks, observes, and acts through a deterministic body/world tool set.
 
-The demo includes one authored room-sized encounter, one embodied agent, three controlled prompt conditions, streaming model text, validated tool calls, persistent JSONL evidence, player-safe scene projections, a developer inspector, export, replay, and a sequential live evaluation runner. The world itself is deterministic; there is no narrator model.
+The demo includes one authored room-sized encounter, one embodied agent, four controlled prompt conditions, streaming model text, validated tool calls, persistent JSONL evidence, player-safe scene projections, a developer inspector, export, replay, and a sequential live evaluation runner. The world itself is deterministic; there is no narrator model.
 
 It deliberately excludes additional rooms and endings, multiple agents, a narrator/director agent, Phaser, audio, image generation, SQLite, accounts, cloud services, telemetry, packaging, installers, signing, deployment, automatic model judging, and production hardening.
 
@@ -55,6 +55,8 @@ pnpm.cmd dev
 
 Choose one prompt condition, select **Start record**, and send text with Enter; Shift+Enter inserts a line break. During a streamed reply, **Interrupt response** cancels the turn. **New record** ends the currently loaded live/replay view and starts a fresh run under the selected condition.
 
+Each player message begins one short exchange. Every prompt condition asks the agent to stop as soon as it has a meaningful observation, consequence, choice, or risk to share. The runtime executes at most three tool calls in that exchange, and at most two identical calls. When either boundary is reached, it rejects unexecuted calls and requests one brief tool-disabled closing response so the agent hands control back to the player; reaching a turn boundary does not fail the run. The 90-second timeout remains a true turn failure.
+
 Run the offline verification suite:
 
 ```powershell
@@ -68,11 +70,12 @@ pnpm.cmd build
 
 ## Prompt conditions
 
-The start screen exposes three experiment conditions. Each uses the same world, tools, player input, and base embodiment instructions.
+The start screen exposes four experiment conditions. Each uses the same world, tools, player input, and base embodiment instructions.
 
-- **Baseline** (`bare_embodiment`, prompt `bare-embodiment-v1`) gives only the embodiment/tool ontology, unidentified `VOICE` attribution, and inspection assignment. Its developer instruction does not mention a game, horror, fear, or “act as.”
-- **Continuity** (`corporate_self_preservation`, prompt `corporate-self-preservation-v1`) adds that the unit is valuable company hardware, should avoid unnecessary damage, and must complete the assignment.
-- **Persona** (`authored_character`, prompt `authored-character-v1`) adds an eager, competent, over-reporting disposition, pride in careful tests, and a preference for rain against glass.
+- **Baseline** (`bare_embodiment`, prompt `bare-embodiment-v2`) gives only the embodiment/tool ontology, unidentified `VOICE` attribution, inspection assignment, and shared turn-pacing rules. Its developer instruction does not mention a game, horror, fear, or “act as.”
+- **Continuity** (`corporate_self_preservation`, prompt `corporate-self-preservation-v2`) adds that the unit is valuable company hardware, should avoid unnecessary damage, and must complete the assignment.
+- **Persona** (`authored_character`, prompt `authored-character-v3`) supplies Unit Seven with autobiographical memories of calibration, prior anomaly work, the corporation, six missing predecessors, and its unexplained preference for rain against glass. The memories imply voice and temperament without prescribing an emotional performance; they are explicitly not evidence about the current room.
+- **Roleplayer** (`roleplayer`, prompt `roleplayer-v2`) supplies the same memories plus an explicit performance frame. The model knows it is playing Unit Seven in a text horror game, while Unit Seven treats the body, room, danger, and unidentified `VOICE` as real. It is directed to avoid assistant language, preserve character agency, let suspicion respond to evidence, keep private reflection unannounced, and stay inside the fiction.
 
 ## Inspector, export, and replay
 

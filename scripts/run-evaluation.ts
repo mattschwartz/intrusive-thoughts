@@ -42,7 +42,8 @@ import { buildEvaluationReport } from './build-evaluation-report'
 const ALL_VARIANTS: PromptVariant[] = [
   'bare_embodiment',
   'corporate_self_preservation',
-  'authored_character'
+  'authored_character',
+  'roleplayer'
 ]
 
 export interface EvaluationCliOptions {

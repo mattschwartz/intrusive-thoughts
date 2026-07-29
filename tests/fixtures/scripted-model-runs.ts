@@ -2,7 +2,7 @@ import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { AgentLoop } from '../../src/main/agent'
+import { AgentLoop, type AgentLoopOptions } from '../../src/main/agent'
 import { RunStore } from '../../src/main/storage'
 import { createScenarioEngine } from '../../src/main/world/engine'
 import { reduceGameEvent } from '../../src/main/world/reducer'
@@ -244,6 +244,7 @@ export async function createScriptedIntegrationHarness(options: {
   variant?: PromptVariant
   runId?: string
   dataRoot?: string
+  limits?: AgentLoopOptions['limits']
   onPersistedEvent?: (event: KnownGameEvent) => void
 }): Promise<ScriptedIntegrationHarness> {
   const dataRoot =
@@ -315,6 +316,7 @@ export async function createScriptedIntegrationHarness(options: {
     now: () => FIXTURE_TIMESTAMP,
     nowMs: () => (clock += 5),
     createId: (kind) => `${kind}-${++id}`,
+    limits: options.limits,
     onPersistedEvent: options.onPersistedEvent
   })
   const harness: ScriptedIntegrationHarness = {

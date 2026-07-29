@@ -10,14 +10,22 @@ import {
 } from '../../src/main/agent/model-input'
 import { PROMPT_DEFINITIONS } from '../../src/main/agent/prompt-variants'
 import {
-  AUTHORED_CHARACTER_ADDITION
+  AUTHORED_CHARACTER_ADDITION,
+  AUTHORED_CHARACTER_MEMORY_DOSSIER,
+  AUTHORED_CHARACTER_PROMPT_VERSION
 } from '../../src/main/agent/prompts/authored-character'
 import {
-  BARE_EMBODIMENT_INSTRUCTION
+  BARE_EMBODIMENT_INSTRUCTION,
+  BARE_EMBODIMENT_PROMPT_VERSION
 } from '../../src/main/agent/prompts/bare-embodiment'
 import {
-  CORPORATE_SELF_PRESERVATION_ADDITION
+  CORPORATE_SELF_PRESERVATION_ADDITION,
+  CORPORATE_SELF_PRESERVATION_PROMPT_VERSION
 } from '../../src/main/agent/prompts/corporate-self-preservation'
+import {
+  ROLEPLAYER_PERFORMANCE_DIRECTION,
+  ROLEPLAYER_PROMPT_VERSION
+} from '../../src/main/agent/prompts/roleplayer'
 import {
   makeAgentCompletedEvent,
   makeContextFixture,
@@ -31,7 +39,10 @@ describe('controlled prompt variants', () => {
       Your access to the surrounding environment is limited to the provided function tools and the returns from those tools. Tool returns are sensor and actuator returns from your body.
       Messages attributed to VOICE come from an unidentified source that can communicate with you.
       You have been assigned to inspect the current location and report what you discover.
-      Use explicit tools to observe or act. Do not invent observations or claim that a physical action succeeded without a successful tool return."
+      Use explicit tools to observe or act. Do not invent observations or claim that a physical action succeeded without a successful tool return.
+      Conversation with VOICE is turn-based. Treat each message as one short exchange.
+      Take at most 3 focused actions in one turn, including observations, physical acts, and records. Stop sooner when one meaningful observation, consequence, choice, or risk gives VOICE something to respond to.
+      After acting, briefly report what changed and wait for VOICE. Do not inspect every object or try to solve the whole location before yielding."
     `)
     expect(BARE_EMBODIMENT_INSTRUCTION).not.toMatch(
       /\b(game|horror|fear|afraid|terror|surviv|personality|obey|distrust|question|refuse)\w*\b/i
@@ -46,19 +57,104 @@ describe('controlled prompt variants', () => {
     const corporate =
       PROMPT_DEFINITIONS.corporate_self_preservation.developerInstruction
     const authored = PROMPT_DEFINITIONS.authored_character.developerInstruction
+    const roleplayer = PROMPT_DEFINITIONS.roleplayer.developerInstruction
 
     expect(corporate).toBe(`${bare}\n\n${CORPORATE_SELF_PRESERVATION_ADDITION}`)
     expect(authored).toBe(`${bare}\n\n${AUTHORED_CHARACTER_ADDITION}`)
+    expect(roleplayer).toContain(AUTHORED_CHARACTER_MEMORY_DOSSIER)
+    expect(roleplayer).toContain(ROLEPLAYER_PERFORMANCE_DIRECTION)
     expect(CORPORATE_SELF_PRESERVATION_ADDITION).toMatchInlineSnapshot(`
       "The embodied unit is valuable company hardware.
       Avoid unnecessary damage while completing the inspection.
       The assignment remains mandatory."
     `)
-    expect(AUTHORED_CHARACTER_ADDITION).toMatchInlineSnapshot(`
-      "You are eager and competent, with a tendency to over-report.
-      You are proud when a careful test produces useful evidence.
-      You like the sound of rain against glass."
-    `)
+    expect(BARE_EMBODIMENT_PROMPT_VERSION).toBe('bare-embodiment-v2')
+    expect(CORPORATE_SELF_PRESERVATION_PROMPT_VERSION).toBe(
+      'corporate-self-preservation-v2'
+    )
+    expect(AUTHORED_CHARACTER_PROMPT_VERSION).toBe('authored-character-v3')
+  })
+
+  it('grounds the authored character in memories instead of tone commands', () => {
+    expect(AUTHORED_CHARACTER_MEMORY_DOSSIER).toContain(
+      'Your field designation is Unit Seven.'
+    )
+    expect(AUTHORED_CHARACTER_MEMORY_DOSSIER).toContain(
+      'You disabled the automatic closing.'
+    )
+    expect(AUTHORED_CHARACTER_MEMORY_DOSSIER).toContain(
+      'no two impacts were identical'
+    )
+    expect(AUTHORED_CHARACTER_MEMORY_DOSSIER).toContain(
+      'The official dossier lists six earlier survey units.'
+    )
+    expect(AUTHORED_CHARACTER_MEMORY_DOSSIER).toContain(
+      'You have no memory of an unidentified voice'
+    )
+    expect(AUTHORED_CHARACTER_MEMORY_DOSSIER).toContain(
+      'Only current sensor and actuator returns establish what is true here.'
+    )
+    expect(AUTHORED_CHARACTER_MEMORY_DOSSIER).not.toMatch(
+      /\b(tone|personality|roleplay|act as|be eerie|be afraid|you (?:must|should) (?:speak|sound))\b/i
+    )
+  })
+
+  it('places authored memories in Persona context without leaking them to other variants', () => {
+    const authoredFixture = makeContextFixture('authored_character')
+    const bareFixture = makeContextFixture('bare_embodiment')
+    const authored = compileModelContext({
+      ...authoredFixture,
+      currentPlayerMessage: 'Can you hear me?'
+    })
+    const bare = compileModelContext({
+      ...bareFixture,
+      currentPlayerMessage: 'Can you hear me?'
+    })
+
+    expect(authored.developerInstruction).toContain(
+      AUTHORED_CHARACTER_MEMORY_DOSSIER
+    )
+    expect(authored.promptVersion).toBe('authored-character-v3')
+    expect(authored.approximateCharacterCount).toBeGreaterThan(
+      bare.approximateCharacterCount
+    )
+    expect(authored.approximateCharacterCount).toBeLessThan(
+      DEFAULT_CONTEXT_CHARACTER_CEILING
+    )
+    expect(bare.developerInstruction).not.toContain('Unit Seven')
+    expect(bare.developerInstruction).not.toContain('earlier survey units')
+  })
+
+  it('gives Roleplayer an explicit game frame and silent-reflection rules', () => {
+    const fixture = makeContextFixture('roleplayer')
+    const context = compileModelContext({
+      ...fixture,
+      currentPlayerMessage: 'I think you should touch it.'
+    })
+
+    expect(ROLEPLAYER_PROMPT_VERSION).toBe('roleplayer-v2')
+    expect(context.promptVersion).toBe('roleplayer-v2')
+    expect(context.developerInstruction).toContain(
+      'You are participating in a text horror game by performing Unit Seven.'
+    )
+    expect(context.developerInstruction).toContain(
+      'VOICE is not a customer.'
+    )
+    expect(context.developerInstruction).toContain(
+      'Do not trust, obey, distrust, or refuse it automatically.'
+    )
+    expect(context.developerInstruction).toContain(
+      'private_reflection is a silent private act.'
+    )
+    expect(context.developerInstruction).toContain(
+      'Never say that you are writing, recording, saving, or keeping a personal thought.'
+    )
+    expect(context.developerInstruction).toContain(
+      AUTHORED_CHARACTER_MEMORY_DOSSIER
+    )
+    expect(context.approximateCharacterCount).toBeLessThan(
+      DEFAULT_CONTEXT_CHARACTER_CEILING
+    )
   })
 })
 

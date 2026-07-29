@@ -7,6 +7,7 @@ import {
   knownGameEventSchema,
   modelToolDefinitionSchema,
   playerSceneViewSchema,
+  promptVariantSchema,
   rendererEventSchema,
   submitPlayerMessageInputSchema,
   toolInputSchemas,
@@ -68,6 +69,15 @@ function makeState(): GameState {
 }
 
 describe('shared state contracts', () => {
+  it('accepts all four controlled prompt conditions', () => {
+    expect(promptVariantSchema.options).toEqual([
+      'bare_embodiment',
+      'corporate_self_preservation',
+      'authored_character',
+      'roleplayer'
+    ])
+  })
+
   it('represents canonical and contradictory perceived body conditions separately', () => {
     const state = makeState()
     const hand = state.body.limbs.right_hand

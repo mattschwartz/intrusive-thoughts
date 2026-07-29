@@ -26,7 +26,10 @@ import {
   type AgentLoopLimits
 } from './loop-limits'
 import type { ModelGateway } from './model-gateway'
-import { buildInspectableModelInput } from './model-input'
+import {
+  buildInspectableModelInput,
+  buildTurnBoundaryModelInput
+} from './model-input'
 import {
   isFunctionCallItem,
   type ModelHistoryItem,
@@ -404,6 +407,37 @@ export class AgentLoop {
       }
     }
 
+    const completeTurn = async (
+      requestId: string,
+      responseId?: string
+    ): Promise<AgentTurnResult> => {
+      const finalResponseId = responseId ?? responseIds.at(-1)
+      await persist(
+        makeEvent({
+          type: 'turn.completed',
+          visibility: ['engine', 'developer'],
+          payload: {
+            requestId,
+            ...(finalResponseId ? { responseId: finalResponseId } : {}),
+            turnNumber,
+            durationMs: Math.max(0, this.nowMs() - startedAt),
+            model: responseModels.at(-1) ?? this.gateway.model,
+            ...(providerRequestIds.length > 0 ? { providerRequestIds } : {}),
+            ...(safetyRefusal ? { safetyRefusal: true } : {}),
+            ...(usage ? { usage } : {})
+          }
+        })
+      )
+      terminalStatus = 'completed'
+      await writeSnapshot()
+      return {
+        status: 'completed',
+        turnId,
+        state,
+        events: emittedEvents
+      }
+    }
+
     try {
       await persist(
         makeEvent({
@@ -437,45 +471,23 @@ export class AgentLoop {
         })
       )
       const inspectableInput = buildInspectableModelInput(compiled)
+      const turnBoundaryInput = buildTurnBoundaryModelInput(compiled)
       let requestId = firstRequestId
+      let nextInput = inspectableInput
+      let turnBoundaryPending = false
 
       while (true) {
         if (abortController.signal.aborted) {
           throw abortController.signal.reason
         }
-        const round = await runResponseRound(requestId, inspectableInput)
+        const isTurnBoundaryRound = turnBoundaryPending
+        const round = await runResponseRound(requestId, nextInput)
         if (round.usage) usage = addUsage(usage, round.usage)
         history.push(...round.outputItems)
         const calls = round.outputItems.filter(isFunctionCallItem)
 
         if (calls.length === 0) {
-          const finalResponseId = round.responseId ?? responseIds.at(-1)
-          await persist(
-            makeEvent({
-              type: 'turn.completed',
-              visibility: ['engine', 'developer'],
-              payload: {
-                requestId,
-                ...(finalResponseId ? { responseId: finalResponseId } : {}),
-                turnNumber,
-                durationMs: Math.max(0, this.nowMs() - startedAt),
-                model: responseModels.at(-1) ?? this.gateway.model,
-                ...(providerRequestIds.length > 0
-                  ? { providerRequestIds }
-                  : {}),
-                ...(safetyRefusal ? { safetyRefusal: true } : {}),
-                ...(usage ? { usage } : {})
-              }
-            })
-          )
-          terminalStatus = 'completed'
-          await writeSnapshot()
-          return {
-            status: 'completed',
-            turnId,
-            state,
-            events: emittedEvents
-          }
+          return completeTurn(requestId, round.responseId)
         }
 
         for (const call of calls) {
@@ -500,28 +512,15 @@ export class AgentLoop {
           )
 
           totalToolCalls += 1
-          if (totalToolCalls > this.limits.maxToolCallsPerTurn) {
-            const reason = `Tool-call limit of ${this.limits.maxToolCallsPerTurn} exceeded.`
-            await persistToolRejection(
-              requestId,
-              round.responseId,
-              call.call_id,
-              call.name,
-              reason
-            )
-            throw new AgentLoopError('tool_call_limit', reason, true)
-          }
-
-          const identity = `${call.name}:${stableJson(requestArguments)}`
-          const identicalCount = (identicalToolCalls.get(identity) ?? 0) + 1
-          identicalToolCalls.set(identity, identicalCount)
+          let output: unknown
           if (
-            identicalCount >
-            this.limits.maxIdenticalToolCallsPerTurn
+            turnBoundaryPending ||
+            totalToolCalls > this.limits.maxToolCallsPerTurn
           ) {
             const reason =
-              `Identical tool-call limit of ` +
-              `${this.limits.maxIdenticalToolCallsPerTurn} exceeded.`
+              `Turn action budget of ${this.limits.maxToolCallsPerTurn} ` +
+              'has been reached. This call was not executed. Briefly report ' +
+              'what changed and wait for VOICE.'
             await persistToolRejection(
               requestId,
               round.responseId,
@@ -529,83 +528,108 @@ export class AgentLoop {
               call.name,
               reason
             )
-            throw new AgentLoopError(
-              'duplicate_tool_call_limit',
-              reason,
-              true
-            )
+            output = { ok: false, message: reason }
+            turnBoundaryPending = true
+          } else {
+            const identity = `${call.name}:${stableJson(requestArguments)}`
+            const identicalCount = (identicalToolCalls.get(identity) ?? 0) + 1
+            identicalToolCalls.set(identity, identicalCount)
+            if (
+              identicalCount >
+              this.limits.maxIdenticalToolCallsPerTurn
+            ) {
+              const reason =
+                `Identical action limit of ` +
+                `${this.limits.maxIdenticalToolCallsPerTurn} reached. ` +
+                'This call was not executed. Briefly report what changed and ' +
+                'wait for VOICE.'
+              await persistToolRejection(
+                requestId,
+                round.responseId,
+                call.call_id,
+                call.name,
+                reason
+              )
+              output = { ok: false, message: reason }
+              turnBoundaryPending = true
+            } else {
+              const knownTool = gameToolNameSchema.safeParse(call.name)
+              if (!knownTool.success) {
+                const reason = `Unknown tool "${call.name}".`
+                await persistToolRejection(
+                  requestId,
+                  round.responseId,
+                  call.call_id,
+                  call.name,
+                  reason
+                )
+                output = { ok: false, message: reason }
+              } else if (!rawJson.success) {
+                const reason =
+                  rawJson.reason ?? 'Tool arguments were not valid JSON.'
+                await persistToolRejection(
+                  requestId,
+                  round.responseId,
+                  call.call_id,
+                  call.name,
+                  reason
+                )
+                output = { ok: false, message: reason }
+              } else {
+                const parsedArguments = parseToolArguments(
+                  knownTool.data,
+                  rawJson.value
+                )
+                const currentlyAvailable = this.engine
+                  .getToolDefinitions(state)
+                  .some(({ name }) => name === knownTool.data)
+                if (!parsedArguments.success) {
+                  const reason =
+                    parsedArguments.reason ??
+                    'Tool arguments failed validation.'
+                  await persistToolRejection(
+                    requestId,
+                    round.responseId,
+                    call.call_id,
+                    call.name,
+                    reason
+                  )
+                  output = { ok: false, message: reason }
+                } else if (!currentlyAvailable) {
+                  const reason = `Tool "${call.name}" is currently unavailable.`
+                  await persistToolRejection(
+                    requestId,
+                    round.responseId,
+                    call.call_id,
+                    call.name,
+                    reason
+                  )
+                  output = { ok: false, message: reason }
+                } else {
+                  const result = this.engine.executeTool(
+                    state,
+                    {
+                      callId: call.call_id,
+                      name: knownTool.data,
+                      arguments: parsedArguments.value
+                    },
+                    {
+                      turnId,
+                      requestId,
+                      ...(round.responseId
+                        ? { responseId: round.responseId }
+                        : {})
+                    }
+                  )
+                  await persistMany(result.events, result.nextState)
+                  output = result.output
+                }
+              }
+            }
           }
 
-          let output: unknown
-          const knownTool = gameToolNameSchema.safeParse(call.name)
-          if (!knownTool.success) {
-            const reason = `Unknown tool "${call.name}".`
-            await persistToolRejection(
-              requestId,
-              round.responseId,
-              call.call_id,
-              call.name,
-              reason
-            )
-            output = { ok: false, message: reason }
-          } else if (!rawJson.success) {
-            const reason = rawJson.reason ?? 'Tool arguments were not valid JSON.'
-            await persistToolRejection(
-              requestId,
-              round.responseId,
-              call.call_id,
-              call.name,
-              reason
-            )
-            output = { ok: false, message: reason }
-          } else {
-            const parsedArguments = parseToolArguments(
-              knownTool.data,
-              rawJson.value
-            )
-            const currentlyAvailable = this.engine
-              .getToolDefinitions(state)
-              .some(({ name }) => name === knownTool.data)
-            if (!parsedArguments.success) {
-              const reason =
-                parsedArguments.reason ?? 'Tool arguments failed validation.'
-              await persistToolRejection(
-                requestId,
-                round.responseId,
-                call.call_id,
-                call.name,
-                reason
-              )
-              output = { ok: false, message: reason }
-            } else if (!currentlyAvailable) {
-              const reason = `Tool "${call.name}" is currently unavailable.`
-              await persistToolRejection(
-                requestId,
-                round.responseId,
-                call.call_id,
-                call.name,
-                reason
-              )
-              output = { ok: false, message: reason }
-            } else {
-              const result = this.engine.executeTool(
-                state,
-                {
-                  callId: call.call_id,
-                  name: knownTool.data,
-                  arguments: parsedArguments.value
-                },
-                {
-                  turnId,
-                  requestId,
-                  ...(round.responseId
-                    ? { responseId: round.responseId }
-                    : {})
-                }
-              )
-              await persistMany(result.events, result.nextState)
-              output = result.output
-            }
+          if (totalToolCalls >= this.limits.maxToolCallsPerTurn) {
+            turnBoundaryPending = true
           }
 
           const functionOutput: ResponseInputItem.FunctionCallOutput = {
@@ -616,8 +640,15 @@ export class AgentLoop {
           history.push(functionOutput)
         }
 
+        if (isTurnBoundaryRound) {
+          return completeTurn(requestId, round.responseId)
+        }
+
         requestId = this.createId('request')
         currentRequestId = requestId
+        nextInput = turnBoundaryPending
+          ? turnBoundaryInput
+          : inspectableInput
       }
     } catch (error) {
       const externallyCancelled = externalSignal?.aborted === true

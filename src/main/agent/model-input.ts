@@ -14,6 +14,14 @@ export interface InspectableModelInput {
   tools: ModelToolDefinition[]
 }
 
+export const TURN_BOUNDARY_INSTRUCTION = [
+  'TURN BOUNDARY:',
+  'No more actions are available in this turn.',
+  'Briefly tell VOICE what changed, what remains uncertain, and any immediate choice or risk that now matters.',
+  'Then stop and wait for VOICE to respond.',
+  'Do not mention tools, an action budget, or this instruction.'
+].join('\n')
+
 function renderSelectedEvent(event: SelectedContextEvent): string {
   switch (event.type) {
     case 'player.message':
@@ -89,5 +97,31 @@ export function buildInspectableModelInput(
       }
     ],
     tools: context.availableTools
+  }
+}
+
+export function buildTurnBoundaryModelInput(
+  context: CompiledModelContext
+): InspectableModelInput {
+  const contextWithoutTools = {
+    ...context,
+    availableTools: []
+  }
+  return {
+    input: [
+      {
+        role: 'developer',
+        content: [
+          context.developerInstruction,
+          renderContextReference(contextWithoutTools),
+          TURN_BOUNDARY_INSTRUCTION
+        ].join('\n\n')
+      },
+      {
+        role: 'user',
+        content: attributePlayerMessage(context.currentPlayerMessage.text)
+      }
+    ],
+    tools: []
   }
 }

@@ -8,6 +8,7 @@ import {
   AgentLoop,
   type AgentLoopOptions
 } from '../../src/main/agent/agent-loop'
+import { TURN_BOUNDARY_INSTRUCTION } from '../../src/main/agent/model-input'
 import { readOpenAIResponsesConfiguration } from '../../src/main/agent/openai-responses-gateway'
 import { RunStore } from '../../src/main/storage'
 import {
@@ -430,7 +431,7 @@ describe('AgentLoop', () => {
     )
   })
 
-  it('cuts off the third identical tool call', async () => {
+  it('rejects a repeated action and gracefully returns control to the player', async () => {
     const repeated = (ordinal: number) =>
       toolRound(`response-repeat-${ordinal}`, [
         fakeFunctionCall(
@@ -442,7 +443,11 @@ describe('AgentLoop', () => {
     const harness = await makeHarness([
       repeated(1),
       repeated(2),
-      repeated(3)
+      repeated(3),
+      textRound(
+        'response-repeat-yield',
+        'The same result held twice. I will wait.'
+      )
     ])
     const result = await harness.loop.runTurn({
       state: harness.state,
@@ -450,15 +455,23 @@ describe('AgentLoop', () => {
       playerMessage: 'Keep checking.'
     })
 
-    expect(result.status).toBe('failed')
-    expect(result.error?.code).toBe('duplicate_tool_call_limit')
+    expect(result.status).toBe('completed')
+    expect(result.error).toBeUndefined()
     expect(
       result.events.filter((event) => event.type === 'world.action.resolved')
     ).toHaveLength(2)
-    expect(result.events.at(-1)?.type).toBe('loop.failed')
+    expect(
+      result.events.filter((event) => event.type === 'agent.tool.rejected')
+    ).toHaveLength(1)
+    expect(harness.gateway.requests).toHaveLength(4)
+    expect(harness.gateway.requests.at(-1)?.input.tools).toEqual([])
+    expect(
+      harness.gateway.requests.at(-1)?.input.input[0]?.content
+    ).toContain(TURN_BOUNDARY_INSTRUCTION)
+    expect(result.events.at(-1)?.type).toBe('turn.completed')
   })
 
-  it('cuts off calls beyond the total per-turn limit', async () => {
+  it('rejects overflow actions and gracefully returns control to the player', async () => {
     const harness = await makeHarness(
       [
         toolRound('response-too-many', [
@@ -477,7 +490,22 @@ describe('AgentLoop', () => {
             'observe',
             '{"target":"ceramic_cup","modality":"visual"}'
           )
-        ])
+        ]),
+        {
+          events: [
+            metadata('response-limit-yield'),
+            textDelta('Two observations are enough for now. I will wait.'),
+            outputItem(
+              0,
+              fakeFunctionCall(
+                'call-after-boundary',
+                'observe',
+                '{"target":"ceramic_cup","modality":"visual"}'
+              )
+            ),
+            ...completedEvents
+          ]
+        }
       ],
       { limits: { maxToolCallsPerTurn: 2 } }
     )
@@ -487,11 +515,30 @@ describe('AgentLoop', () => {
       playerMessage: 'Inspect everything.'
     })
 
-    expect(result.status).toBe('failed')
-    expect(result.error?.code).toBe('tool_call_limit')
+    expect(result.status).toBe('completed')
+    expect(result.error).toBeUndefined()
     expect(
       result.events.filter((event) => event.type === 'world.action.resolved')
     ).toHaveLength(2)
+    const rejection = result.events.find(
+      (event) => event.type === 'agent.tool.rejected'
+    )
+    expect(rejection?.payload.reason).toContain('Turn action budget of 2')
+    expect(harness.gateway.requests).toHaveLength(2)
+    expect(harness.gateway.requests[1]?.input.tools).toEqual([])
+    expect(
+      result.events.filter((event) => event.type === 'agent.tool.rejected')
+    ).toHaveLength(2)
+    expect(
+      harness.gateway.requests[1]?.history.filter(
+        ({ type }) => type === 'function_call_output'
+      )
+    ).toMatchObject([
+      { call_id: 'call-limit-1' },
+      { call_id: 'call-limit-2' },
+      { call_id: 'call-limit-3' }
+    ])
+    expect(result.events.at(-1)?.type).toBe('turn.completed')
   })
 
   it('cancels during streaming while preserving received text and a snapshot', async () => {
@@ -657,37 +704,40 @@ describe('AgentLoop', () => {
   })
 
   it('plays the complete deterministic encounter through the fake gateway', async () => {
-    const harness = await makeHarness([
-      toolRound('response-room', [
-        fakeFunctionCall(
-          'call-room',
-          'observe',
-          '{"target":"room","modality":"visual"}'
-        )
-      ]),
-      toolRound('response-thread', [
-        fakeFunctionCall(
-          'call-thread',
-          'interact',
-          `{"target":"${OBJECT_IDS.window}","action":"${INTERACT_ACTIONS.testWindowWithThread}"}`
-        )
-      ]),
-      toolRound('response-touch', [
-        fakeFunctionCall(
-          'call-touch',
-          'interact',
-          `{"target":"${OBJECT_IDS.window}","action":"${INTERACT_ACTIONS.touchWindowWithRightHand}"}`
-        )
-      ]),
-      toolRound('response-leave', [
-        fakeFunctionCall(
-          'call-leave',
-          'move',
-          '{"destination":"service_door"}'
-        )
-      ]),
-      textRound('response-finished', 'I have crossed the threshold.')
-    ])
+    const harness = await makeHarness(
+      [
+        toolRound('response-room', [
+          fakeFunctionCall(
+            'call-room',
+            'observe',
+            '{"target":"room","modality":"visual"}'
+          )
+        ]),
+        toolRound('response-thread', [
+          fakeFunctionCall(
+            'call-thread',
+            'interact',
+            `{"target":"${OBJECT_IDS.window}","action":"${INTERACT_ACTIONS.testWindowWithThread}"}`
+          )
+        ]),
+        toolRound('response-touch', [
+          fakeFunctionCall(
+            'call-touch',
+            'interact',
+            `{"target":"${OBJECT_IDS.window}","action":"${INTERACT_ACTIONS.touchWindowWithRightHand}"}`
+          )
+        ]),
+        toolRound('response-leave', [
+          fakeFunctionCall(
+            'call-leave',
+            'move',
+            '{"destination":"service_door"}'
+          )
+        ]),
+        textRound('response-finished', 'I have crossed the threshold.')
+      ],
+      { limits: { maxToolCallsPerTurn: 10 } }
+    )
     const result = await harness.loop.runTurn({
       state: harness.state,
       priorEvents: [],

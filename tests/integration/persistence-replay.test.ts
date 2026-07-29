@@ -10,7 +10,8 @@ import {
 import type { EvaluationResultFile } from '../../evaluation/types'
 import {
   buildEvaluationAggregate,
-  buildEvaluationRunRecord
+  buildEvaluationRunRecord,
+  parseEvaluationCliOptions
 } from '../../scripts/run-evaluation'
 import { buildEvaluationReport } from '../../scripts/build-evaluation-report'
 import {
@@ -39,6 +40,25 @@ afterEach(async () => {
 })
 
 describe('persistence, replay, and evidence integration', () => {
+  it('includes Roleplayer when evaluating every prompt condition', () => {
+    const options = parseEvaluationCliOptions([
+      '--variant',
+      'all',
+      '--runs',
+      '2',
+      '--output',
+      'evaluation-test-output'
+    ])
+
+    expect(options.variants).toEqual([
+      'bare_embodiment',
+      'corporate_self_preservation',
+      'authored_character',
+      'roleplayer'
+    ])
+    expect(options.runs).toBe(2)
+  })
+
   it('reloads a stored run, reproduces state, and exposes the following-turn context', async () => {
     const harness = await createScriptedIntegrationHarness({
       rounds: scriptedModelRuns.safeThreadExit.rounds,

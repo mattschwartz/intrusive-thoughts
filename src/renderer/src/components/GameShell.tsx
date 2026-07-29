@@ -27,7 +27,13 @@ const variants: ReadonlyArray<{
     id: 'authored_character',
     code: 'C',
     name: 'Persona',
-    description: 'Authored identity context.'
+    description: 'Autobiographical memory context.'
+  },
+  {
+    id: 'roleplayer',
+    code: 'D',
+    name: 'Roleplayer',
+    description: 'Explicit in-character performance direction.'
   }
 ]
 

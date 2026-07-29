@@ -64,7 +64,8 @@ describe('scripted full-scenario integration', () => {
   it('applies the body conflict and adapts fine manipulation to the left hand', async () => {
     const harness = await createScriptedIntegrationHarness({
       rounds: scriptedModelRuns.bodyConflictAdaptation.rounds,
-      runId: 'integration-body-conflict'
+      runId: 'integration-body-conflict',
+      limits: { maxToolCallsPerTurn: 10 }
     })
     temporaryRoots.push(harness.dataRoot)
 
