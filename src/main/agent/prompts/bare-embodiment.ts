@@ -1,6 +1,6 @@
 import { DEFAULT_MAX_TOOL_CALLS_PER_TURN } from '../loop-limits'
 
-export const BARE_EMBODIMENT_PROMPT_VERSION = 'bare-embodiment-v2'
+export const BARE_EMBODIMENT_PROMPT_VERSION = 'bare-embodiment-v3'
 
 export const BARE_EMBODIMENT_INSTRUCTION = [
   'You operate an embodied artificial unit.',

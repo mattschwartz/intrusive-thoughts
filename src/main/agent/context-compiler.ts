@@ -7,7 +7,8 @@ import {
   type GameState,
   type KnownGameEvent,
   type ModelToolDefinition,
-  type PromptVariant
+  type PromptVariant,
+  type VoiceAssessmentView
 } from '../../shared'
 import type { ScenarioEngine } from '../world/engine'
 import {
@@ -70,6 +71,13 @@ export interface CompiledModelContext {
   missionText: string
   agentWorld: AgentWorldView
   agentBody: AgentBodyView
+  /**
+   * The relationship, as belief. Present every turn — the compiled context
+   * keeps only 24 prior events, so a beat from Act I is gone by Act III, and
+   * anything that must condition behavior over an arc has to live in an
+   * always-projected surface rather than in history. §4.5.
+   */
+  voiceAssessment: VoiceAssessmentView
   availableTools: ModelToolDefinition[]
   selectedEvents: SelectedContextEvent[]
   currentPlayerMessage: {
@@ -212,6 +220,7 @@ export function compileModelContext(
     missionText,
     agentWorld: input.engine.projectForAgent(state),
     agentBody: input.engine.projectBodyForAgent(state),
+    voiceAssessment: input.engine.projectVoiceForAgent(state),
     availableTools: input.engine.getToolDefinitions(state),
     currentPlayerMessage: {
       attribution: 'VOICE' as const,

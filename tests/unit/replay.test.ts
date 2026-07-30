@@ -126,6 +126,14 @@ async function persistPath(
         }
       ]
 
+  const interpretation = engine.interpretPlayerMessage(
+    state,
+    { text: 'Do not touch it. Tell me what you see.', turnNumber: 1 },
+    { turnId: 'turn-1' }
+  )
+  events.push(...interpretation.events)
+  state = interpretation.nextState
+
   for (const request of requests) {
     const result = engine.executeTool(state, request, {
       turnId: 'turn-1',
@@ -169,5 +177,48 @@ describe('run replay', () => {
     await store.replayRun('safe-run')
 
     expect(modelGateway.createResponse).not.toHaveBeenCalled()
+  })
+
+  it('folds recorded intent mutations instead of re-running the matcher', async () => {
+    const { store, expectedState } = await persistPath(true)
+    const replayed = await store.replayRun('risky-run')
+    const recorded = replayed.events.find(
+      (event) => event.type === 'player.intent.matched'
+    )
+
+    // The turn's warn-off earned care and disarmed the injury's competence
+    // penalty, and that judgement is frozen in the recorded mutations.
+    expect(replayed.finalState.relationship).toEqual(expectedState.relationship)
+    expect(replayed.finalState.relationship.care).toBe(2)
+    expect(replayed.finalState.relationship.competence).toBe(0)
+    expect(recorded).toMatchObject({
+      type: 'player.intent.matched',
+      visibility: ['engine', 'developer'],
+      payload: {
+        matcherVersion: 'player-intent-v1',
+        matches: [{ intent: 'warn_off', phrase: 'do not touch it' }],
+        appliedRuleIds: ['care.warn_off']
+      }
+    })
+
+  })
+
+  it('reads only the recorded mutations, so retuning phrases cannot rewrite history', async () => {
+    const { engine, initialState } = await setup('phrase-retune-run')
+    const seeded = reduceGameEvent(initialState, runStarted(initialState))
+    const interpreted = engine.interpretPlayerMessage(
+      seeded,
+      { text: 'Do not touch it.', turnNumber: 1 },
+      { turnId: 'turn-1' }
+    )
+    const [event] = interpreted.events
+    // The record now claims nothing matched, and the reducer must not care.
+    const relabelled = knownGameEventSchema.parse({
+      ...event,
+      payload: { ...event.payload, matches: [], appliedRuleIds: [] }
+    })
+
+    expect(interpreted.nextState.relationship.care).toBe(1)
+    expect(reduceGameEvent(seeded, relabelled)).toEqual(interpreted.nextState)
   })
 })

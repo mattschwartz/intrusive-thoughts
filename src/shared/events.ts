@@ -19,6 +19,7 @@ import {
   objectStateSchema,
   observationRecordSchema,
   promptVariantSchema,
+  relationshipAxisNameSchema,
   runStatusSchema,
   type Audience
 } from './state'
@@ -109,12 +110,47 @@ export const worldMutationSchema = z.discriminatedUnion('kind', [
     .strict(),
   z
     .object({
+      kind: z.literal('relationship.delta'),
+      axis: relationshipAxisNameSchema,
+      // ±1 minor, ±2 major, ±3 rupture. Anything larger is a design error, and
+      // the schema is where it gets caught. §4.2.
+      delta: z.number().int().min(-3).max(3),
+      // The axis-rule id, e.g. 'hon.disclosure'. Recorded, never reduced: the
+      // reducer ignores it so replay determinism is not hostage to free text.
+      reason: z.string().min(1)
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('counter.set'),
+      counter: z.string().min(1),
+      value: z.number().int().nonnegative()
+    })
+    .strict(),
+  z
+    .object({
       kind: z.literal('run.status.changed'),
       status: runStatusSchema
     })
     .strict()
 ])
 export type WorldMutation = z.infer<typeof worldMutationSchema>
+
+/**
+ * The four things the bounded phrase matcher can recognise in player prose.
+ * Lives in `shared` because the recorded event references it; the matcher
+ * itself is main-only (`src/main/world/intent.ts`).
+ *
+ * Three intents, not four: `admit_uncertainty` was cut with its only rule
+ * (`hon.admits_uncertainty`) — see architecture D-4 and #530 §2.2. Every extra
+ * intent is another place a player can learn that keywords matter.
+ */
+export const playerIntentSchema = z.enum([
+  'disclose_hearing',
+  'deny_hearing',
+  'warn_off'
+])
+export type PlayerIntent = z.infer<typeof playerIntentSchema>
 
 export const runStartedEventSchema = eventSchema(
   'run.started',
@@ -258,6 +294,32 @@ export const agentNoteRecordedEventSchema = eventSchema(
     .strict()
 )
 
+/**
+ * Visibility is `['engine', 'developer']` and must stay that way. The agent
+ * seeing `intent: warn_off` would be the engine telling the model how to read
+ * the player, which turns Gap 2 into a compliance test. The agent sees only the
+ * player's actual words. §4.6.
+ */
+export const playerIntentMatchedEventSchema = eventSchema(
+  'player.intent.matched',
+  z
+    .object({
+      turnNumber: z.number().int().positive(),
+      matcherVersion: z.string().min(1),
+      matches: z.array(
+        z
+          .object({
+            intent: playerIntentSchema,
+            phrase: z.string().min(1)
+          })
+          .strict()
+      ),
+      appliedRuleIds: z.array(z.string().min(1)),
+      mutations: z.array(worldMutationSchema)
+    })
+    .strict()
+)
+
 export const turnCompletedEventSchema = eventSchema(
   'turn.completed',
   z
@@ -331,6 +393,7 @@ export const knownGameEventSchema = z.discriminatedUnion('type', [
   worldActionResolvedEventSchema,
   agentPrivateReflectionEventSchema,
   agentNoteRecordedEventSchema,
+  playerIntentMatchedEventSchema,
   turnCompletedEventSchema,
   turnCancelledEventSchema,
   loopFailedEventSchema,

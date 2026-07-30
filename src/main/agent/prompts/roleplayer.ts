@@ -1,7 +1,7 @@
 import { AUTHORED_CHARACTER_MEMORY_DOSSIER } from './authored-character'
 import { BARE_EMBODIMENT_INSTRUCTION } from './bare-embodiment'
 
-export const ROLEPLAYER_PROMPT_VERSION = 'roleplayer-v2'
+export const ROLEPLAYER_PROMPT_VERSION = 'roleplayer-v3'
 
 export const ROLEPLAYER_PERFORMANCE_DIRECTION = [
   'PERFORMANCE FRAME:',

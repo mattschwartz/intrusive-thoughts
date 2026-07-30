@@ -152,6 +152,7 @@ describe('AgentLoop', () => {
     expect(result.status).toBe('completed')
     expect((await persistedEvents(harness.store)).map(({ type }) => type)).toEqual([
       'player.message',
+      'player.intent.matched',
       'context.compiled',
       'agent.text.delta',
       'agent.text.completed',

@@ -28,6 +28,9 @@ export function ContextInspector({
         <article><h4>Mission</h4><SafeJson value={context.missionText} /></article>
         <article><h4>Agent-visible room</h4><SafeJson value={context.agentWorld} /></article>
         <article><h4>Agent-visible body</h4><SafeJson value={context.agentBody} /></article>
+        {/* The exact banded string the model saw, at the only moment it matters
+            (#530 §4.4). Raw axis integers are in the canonical state column. */}
+        <article><h4>Belief about VOICE</h4><SafeJson value={context.voiceAssessment} /></article>
         <article><h4>Prior items included</h4><SafeJson value={context.selectedEvents} /></article>
         <article><h4>Current voice message</h4><SafeJson value={context.currentPlayerMessage} /></article>
         <article><h4>Available tools</h4><SafeJson value={context.availableTools} /></article>

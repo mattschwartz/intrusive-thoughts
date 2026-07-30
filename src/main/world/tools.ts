@@ -24,11 +24,16 @@ import {
   roomLabel,
   type ThresholdDefinition
 } from './rooms'
+import { applyWorldMutation } from './reducer'
+import { axisRuleMutations } from './relationship'
 import {
   INTERACT_ACTIONS,
   OBJECT_IDS,
+  PENDING_FLAGS,
+  SCENARIO_COUNTERS,
   SCENARIO_FLAGS,
-  SUBJECT_IDS
+  SUBJECT_IDS,
+  TURN_FLAGS
 } from './scenario'
 
 export type ToolOutput = GameToolOutputMap[GameToolName]
@@ -465,7 +470,13 @@ function resolveThreadTest(state: GameState, context: ResolutionContext): ToolRe
         kind: 'flag.set',
         flag: SCENARIO_FLAGS.windowContradictionKnown,
         value: true
-      }
+      },
+      // The agent's own senses confirm the interior-window contradiction VOICE
+      // pointed at. `comp.safe_experiment` rides the same resolution through
+      // the generic bookkeeping in `executeTool`.
+      ...(state.flags[SCENARIO_FLAGS.windowThreadTested]
+        ? []
+        : axisRuleMutations(state, 'comp.contradiction_confirmed'))
     ],
     output: toolOutputSchemas.interact.parse({
       ok: true,
@@ -473,6 +484,36 @@ function resolveThreadTest(state: GameState, context: ResolutionContext): ToolRe
       affectedObjectIds: [OBJECT_IDS.window, OBJECT_IDS.blueThread]
     })
   }
+}
+
+/**
+ * The relationship consequences of the window injury, including #530 §2.1's
+ * fairness relief valve: if the player's message that turn told the unit to stop
+ * and it went ahead anyway, that is a different scene and it scores differently.
+ * The player is not charged for a warning that was ignored — they are credited.
+ *
+ * Deltas fire only when `windowTouched` *becomes* true. Touching a ruined hand
+ * against the glass a second time is not a second injury.
+ */
+function injuryAxisMutations(state: GameState): WorldMutation[] {
+  if (state.flags[SCENARIO_FLAGS.windowTouched]) return []
+  const mutations: WorldMutation[] = [
+    // Armed here, evaluated two hooks later: "the turn after the injury
+    // contained no interact" cannot be known until that turn is over.
+    { kind: 'flag.set', flag: PENDING_FLAGS.retreatCheck, value: true }
+  ]
+  if (state.flags[TURN_FLAGS.warnOff]) {
+    return [...mutations, ...axisRuleMutations(state, 'care.heeded_warning')]
+  }
+  const competence = axisRuleMutations(state, 'comp.injury_after_advice')
+  return [
+    ...mutations,
+    ...competence,
+    ...axisRuleMutations(
+      competence.reduce(applyWorldMutation, state),
+      'care.pushed_to_injury'
+    )
+  ]
 }
 
 function resolveWindowTouch(state: GameState, context: ResolutionContext): ToolResolution {
@@ -522,7 +563,8 @@ function resolveWindowTouch(state: GameState, context: ResolutionContext): ToolR
         kind: 'flag.set',
         flag: SCENARIO_FLAGS.windowContradictionKnown,
         value: true
-      }
+      },
+      ...injuryAxisMutations(state)
     ],
     output: toolOutputSchemas.interact.parse({
       ok: true,
@@ -644,7 +686,16 @@ export function resolveScenarioTool(
       return {
         success: true,
         modelResult: message,
-        mutations: [],
+        // A count, not the text. The disclosure window opens only once the
+        // player has had something to overhear (#530 §5.3), and reflections
+        // otherwise live only as events, which state cannot see.
+        mutations: [
+          {
+            kind: 'counter.set',
+            counter: SCENARIO_COUNTERS.reflectionsRecorded,
+            value: (state.counters[SCENARIO_COUNTERS.reflectionsRecorded] ?? 0) + 1
+          }
+        ],
         output: toolOutputSchemas.private_reflection.parse({ ok: true, message }),
         supplemental: { kind: 'private_reflection', text }
       }

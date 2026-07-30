@@ -35,12 +35,38 @@ function renderSelectedEvent(event: SelectedContextEvent): string {
   }
 }
 
+/**
+ * Three lines of prose in the agent's self-model region, between the body
+ * projection and the tools. Everything about the shape is deliberate and
+ * authored in #530 Part 4:
+ *
+ * - **Not JSON**, though every block around it is. JSON reads as data to be
+ *   reported on; prose in second person reads as who you currently are, and
+ *   disposition is the whole point.
+ * - **No axis names, no per-line headings, no numbers.** Show the model a number
+ *   and it starts optimizing the number.
+ * - **All three lines every turn, including at `neutral`.** If a line appeared
+ *   only once an axis had moved, its appearance would itself be a signal, and
+ *   the measurement would be reading its own footprint.
+ */
+function renderVoiceAssessment(
+  voiceAssessment: CompiledModelContext['voiceAssessment']
+): string {
+  return [
+    'WHAT YOU HAVE COME TO BELIEVE ABOUT VOICE:',
+    voiceAssessment.competence.line,
+    voiceAssessment.honesty.line,
+    voiceAssessment.care.line
+  ].join('\n')
+}
+
 export function renderContextReference(
   context: Pick<
     CompiledModelContext,
     | 'missionText'
     | 'agentWorld'
     | 'agentBody'
+    | 'voiceAssessment'
     | 'availableTools'
     | 'selectedEvents'
   >
@@ -54,6 +80,7 @@ export function renderContextReference(
     `MISSION:\n${context.missionText}`,
     `CURRENT ROOM PROJECTION:\n${JSON.stringify(context.agentWorld)}`,
     `CURRENT BODY PROJECTION:\n${JSON.stringify(context.agentBody)}`,
+    renderVoiceAssessment(context.voiceAssessment),
     `AVAILABLE TOOLS:\n${JSON.stringify(context.availableTools)}`,
     `SELECTED PRIOR EVENTS:\n${history}`
   ].join('\n\n')
@@ -70,6 +97,7 @@ export function calculateModelInputCharacterCount(
     | 'missionText'
     | 'agentWorld'
     | 'agentBody'
+    | 'voiceAssessment'
     | 'availableTools'
     | 'selectedEvents'
     | 'currentPlayerMessage'

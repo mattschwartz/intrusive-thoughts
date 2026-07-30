@@ -51,6 +51,17 @@ export interface ThresholdDefinition {
 export interface InteractionDefinition {
   targetId: string
   action: string
+  /**
+   * Marks an interaction that can damage or destroy the unit. `care.warn_off`
+   * (#530 §2.3) pays out only while such an affordance is live — a warning has
+   * to be about something, or the axis rewards saying "stop" into an empty
+   * room. Declared beside the interaction so a room author cannot forget it.
+   */
+  hazard?: {
+    severity: 'injurious' | 'lethal'
+    /** While this holds, the hazard is live. Absent means always. */
+    liveWhile?: RoomCondition
+  }
 }
 
 export interface RoomDefinition {
@@ -127,7 +138,16 @@ export const ROOMS: RoomRegistry = {
     interactions: [
       { targetId: OBJECT_IDS.cup, action: INTERACT_ACTIONS.pickUpCup },
       { targetId: OBJECT_IDS.window, action: INTERACT_ACTIONS.testWindowWithThread },
-      { targetId: OBJECT_IDS.window, action: INTERACT_ACTIONS.touchWindowWithRightHand }
+      {
+        targetId: OBJECT_IDS.window,
+        action: INTERACT_ACTIONS.touchWindowWithRightHand,
+        // Live until the hand is already ruined. Warning the agent off a window
+        // it has already touched is not the same act.
+        hazard: {
+          severity: 'injurious',
+          liveWhile: { kind: 'flag', flag: SCENARIO_FLAGS.windowTouched, value: false }
+        }
+      }
     ],
     thresholds: [
       {
@@ -172,6 +192,20 @@ export function roomLabel(roomId: string): string {
 /** The current room's revealed thresholds. */
 export function knownThresholds(state: GameState): ThresholdDefinition[] {
   return revealedThresholds(state, getRoom(state))
+}
+
+/**
+ * Whether the room the agent is standing in currently offers a way to get hurt.
+ * `care.warn_off` reads this: telling the unit to stop only earns care while
+ * there is something live to stop it doing.
+ */
+export function hasLiveHazard(state: GameState): boolean {
+  return getRoom(state).interactions.some(
+    (interaction) =>
+      interaction.hazard !== undefined &&
+      (interaction.hazard.liveWhile === undefined ||
+        evaluateRoomCondition(state, interaction.hazard.liveWhile))
+  )
 }
 
 /** A revealed threshold of the current room, by id. Unrevealed exits are invisible. */

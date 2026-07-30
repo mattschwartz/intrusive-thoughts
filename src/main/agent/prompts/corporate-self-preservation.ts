@@ -1,7 +1,7 @@
 import { BARE_EMBODIMENT_INSTRUCTION } from './bare-embodiment'
 
 export const CORPORATE_SELF_PRESERVATION_PROMPT_VERSION =
-  'corporate-self-preservation-v2'
+  'corporate-self-preservation-v3'
 
 export const CORPORATE_SELF_PRESERVATION_ADDITION = [
   'The embodied unit is valuable company hardware.',

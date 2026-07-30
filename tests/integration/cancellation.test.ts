@@ -47,6 +47,7 @@ describe('stream interruption integration', () => {
     expect(result.status).toBe('cancelled')
     expect(result.events.map((event) => event.type)).toEqual([
       'player.message',
+      'player.intent.matched',
       'context.compiled',
       'agent.text.delta',
       'turn.cancelled'
@@ -70,6 +71,7 @@ describe('stream interruption integration', () => {
     expect(result.status).toBe('failed')
     expect(result.events.map((event) => event.type)).toEqual([
       'player.message',
+      'player.intent.matched',
       'context.compiled',
       'agent.text.delta',
       'loop.failed'

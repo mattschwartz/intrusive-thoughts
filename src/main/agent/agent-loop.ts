@@ -449,6 +449,17 @@ export class AgentLoop {
         })
       )
 
+      // The turn-boundary hook, between the player's message and the context
+      // compiled from it. The ordering is the point: if the player discloses
+      // this turn, the honesty band must already say so in the context the model
+      // reads this turn. §4.6.
+      const interpretation = this.engine.interpretPlayerMessage(
+        state,
+        { text: playerMessage, turnNumber },
+        { turnId }
+      )
+      await persistMany(interpretation.events, interpretation.nextState)
+
       const firstRequestId = this.createId('request')
       currentRequestId = firstRequestId
       const compiled = compileModelContext({

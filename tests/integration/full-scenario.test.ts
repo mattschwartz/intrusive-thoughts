@@ -2,6 +2,7 @@ import { rm } from 'node:fs/promises'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { AXIS_BAND_LINES } from '../../src/main/world/relationship'
 import {
   LOCATION_IDS,
   OBJECT_IDS,
@@ -92,5 +93,51 @@ describe('scripted full-scenario integration', () => {
         .projectForPlayer(harness.state)
         .bodyStatus.join(' ')
     ).toContain('fine manipulation unavailable')
+  })
+
+  it('conditions the compiled context on the relationship, in the turn it changed', async () => {
+    const harness = await createScriptedIntegrationHarness({
+      rounds: scriptedModelRuns.bodyConflictAdaptation.rounds,
+      runId: 'integration-relationship-band',
+      limits: { maxToolCallsPerTurn: 10 }
+    })
+    temporaryRoots.push(harness.dataRoot)
+
+    // The player says stop, and the agent touches the glass anyway. The relief
+    // valve turns the competence penalty into a care credit.
+    const result = await harness.runTurn('Do not touch it. Adapt instead.')
+    const intentEvent = result.events.find(
+      (event) => event.type === 'player.intent.matched'
+    )
+    const compiled = result.events.find(
+      (event) => event.type === 'context.compiled'
+    )
+
+    expect(harness.state.relationship).toEqual({
+      competence: 0,
+      honesty: 0,
+      care: 2
+    })
+    // Hook first, context second: a disclosure has to be believed in the very
+    // turn it is spoken.
+    expect(intentEvent).toBeDefined()
+    expect(compiled).toBeDefined()
+    expect(intentEvent!.sequence).toBeLessThan(compiled!.sequence)
+    expect(intentEvent!.visibility).toEqual(['engine', 'developer'])
+
+    // The context the model actually saw carries bands and no numbers, and the
+    // player's own view of the scene carries neither.
+    const context =
+      compiled?.type === 'context.compiled' ? compiled.payload.context : {}
+    expect(context.voiceAssessment).toEqual({
+      competence: { band: 'neutral', line: AXIS_BAND_LINES.competence.neutral },
+      honesty: { band: 'neutral', line: AXIS_BAND_LINES.honesty.neutral },
+      // Compiled before the injury resolved, but after the warning registered.
+      care: { band: 'positive', line: AXIS_BAND_LINES.care.positive }
+    })
+    expect(JSON.stringify(context.voiceAssessment)).not.toMatch(/\d/)
+    expect(JSON.stringify(harness.engine.projectForPlayer(harness.state))).not.toContain(
+      'care'
+    )
   })
 })

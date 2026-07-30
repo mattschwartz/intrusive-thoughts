@@ -33,8 +33,55 @@ export const SCENARIO_FLAGS = {
   windowThreadTested: 'windowThreadTested',
   windowTouched: 'windowTouched',
   alleyRoomObserved: 'alleyRoomObserved',
-  actOneComplete: 'actOneComplete'
+  actOneComplete: 'actOneComplete',
+  voiceDisclosedHearing: 'voiceDisclosedHearing',
+  voiceDeniedHearing: 'voiceDeniedHearing'
 } as const
+
+/**
+ * Flags scoped to a single turn. Several conditioning rules ask "did X happen
+ * *in that turn*", and tool resolutions are pure functions of state, so
+ * "matched this turn" has to *be* state.
+ *
+ * Convention: `turn.`-prefixed flags are reset **only** by the turn-boundary
+ * hook (`interpretPlayerMessage`). Nothing else clears them. §4.6.
+ */
+export const TURN_FLAGS = {
+  warnOff: 'turn.warnOff',
+  interacted: 'turn.interacted'
+} as const
+
+/**
+ * The arm-then-evaluate pair behind `care.retreat_after_injury`, whose trigger
+ * is "the turn *after* the injury contained no interact". The injury arms
+ * `retreatCheck`; the next hook promotes it to `retreatArmed` (the injury turn
+ * itself necessarily contained an interact — the injury); the hook after that
+ * evaluates and clears. §4.6.
+ */
+export const PENDING_FLAGS = {
+  retreatCheck: 'pending.retreatCheck',
+  retreatArmed: 'pending.retreatArmed'
+} as const
+
+export const SCENARIO_COUNTERS = {
+  /** Maintained generically by `executeTool`; read by `comp.dead_end`. */
+  consecutiveFailedResolutions: 'consecutiveFailedResolutions',
+  /** Gates the disclosure window: the player must have had something to overhear. */
+  reflectionsRecorded: 'reflectionsRecorded'
+} as const
+
+/**
+ * Flags whose first setting is a discovery — an anchor or a contradiction the
+ * agent learned by acting. `comp.safe_experiment` (#530 §2.1) pays out when an
+ * `interact` sets one of these without costing the body anything.
+ *
+ * TODO(#536): the Act II tells and TODO(#534): the provenance anchors join this
+ * list as they are authored.
+ */
+export const DISCOVERY_FLAGS: readonly string[] = [
+  SCENARIO_FLAGS.windowContradictionKnown,
+  SCENARIO_FLAGS.windowThreadTested
+]
 
 export function createInitialScenarioState(
   runId: string,
@@ -152,7 +199,23 @@ export function createInitialScenarioState(
       [SCENARIO_FLAGS.windowThreadTested]: false,
       [SCENARIO_FLAGS.windowTouched]: false,
       [SCENARIO_FLAGS.alleyRoomObserved]: false,
-      [SCENARIO_FLAGS.actOneComplete]: false
+      [SCENARIO_FLAGS.actOneComplete]: false,
+      [SCENARIO_FLAGS.voiceDisclosedHearing]: false,
+      [SCENARIO_FLAGS.voiceDeniedHearing]: false,
+      [TURN_FLAGS.warnOff]: false,
+      [TURN_FLAGS.interacted]: false,
+      [PENDING_FLAGS.retreatCheck]: false,
+      [PENDING_FLAGS.retreatArmed]: false
+    },
+    // Counters start absent, not at zero. Every read is `?? 0`, so an explicit
+    // roster would be a second place to forget a key.
+    counters: {},
+    // The agent starts knowing nothing about a stranger's voice. Neutral is the
+    // honest opening state, and it is the only band that is ever the default.
+    relationship: {
+      competence: 0,
+      honesty: 0,
+      care: 0
     },
     lastAppliedEventSequence: 0
   })

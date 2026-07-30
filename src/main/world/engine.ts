@@ -12,13 +12,17 @@ import {
   type PlayerSceneView,
   type PromptVariant,
   type ToolExecutionMetadata,
-  type ToolRequest
+  type ToolRequest,
+  type VoiceAssessmentView
 } from '../../shared'
+import { interpretPlayerTurn, PLAYER_INTENT_MATCHER_VERSION } from './intent'
 import {
   projectBodyForAgent,
   projectSceneForPlayer,
+  projectVoiceForAgent,
   projectWorldForAgent
 } from './projections'
+import { postResolutionMutations } from './relationship'
 import { createInitialScenarioState } from './scenario'
 import {
   getScenarioToolDefinitions,
@@ -35,6 +39,11 @@ export interface ToolExecutionResult {
   output: ToolOutput
 }
 
+export interface PlayerMessageInterpretation {
+  events: KnownGameEvent[]
+  nextState: GameState
+}
+
 export interface ScenarioEngine {
   createInitialState(runId: string, variant: PromptVariant): GameState
   getToolDefinitions(state: GameState): ModelToolDefinition[]
@@ -43,15 +52,28 @@ export interface ScenarioEngine {
     request: ToolRequest,
     metadata: ToolExecutionMetadata
   ): ToolExecutionResult
+  /**
+   * The turn-boundary hook. Called once per turn, immediately after
+   * `player.message` is persisted and **before** the context is compiled: the
+   * player's disclosure *is* the telling, so the honesty band must already be in
+   * effect in the turn the player discloses. §4.6.
+   */
+  interpretPlayerMessage(
+    state: GameState,
+    input: { text: string; turnNumber: number },
+    metadata: { turnId: string }
+  ): PlayerMessageInterpretation
   projectForAgent(state: GameState): AgentWorldView
   projectBodyForAgent(state: GameState): AgentBodyView
   projectForPlayer(state: GameState): PlayerSceneView
+  projectVoiceForAgent(state: GameState): VoiceAssessmentView
 }
 
 export interface ScenarioEngineOptions {
   createEventId?: (context: {
     runId: string
-    toolCallId: string
+    /** Absent for events that are not produced by a tool call. */
+    toolCallId?: string
     sequence: number
     type: KnownGameEvent['type']
   }) => string
@@ -87,6 +109,15 @@ export function createScenarioEngine(options: ScenarioEngineOptions = {}): Scena
         eventId: resolutionEventId,
         eventSequence: resolutionSequence
       })
+      // Bookkeeping the relationship system owes every resolution regardless of
+      // what the resolution meant — the turn-scoped interact flag, the
+      // consecutive-failure tally, and the two rules keyed on resolution shape.
+      // Appended here so a content author never has to remember them, and so
+      // they ride the same event and replay with it.
+      const mutations = [
+        ...resolution.mutations,
+        ...postResolutionMutations(state, request.name, resolution)
+      ]
 
       const resolvedEvent: KnownGameEvent = {
         id: resolutionEventId,
@@ -104,7 +135,7 @@ export function createScenarioEngine(options: ScenarioEngineOptions = {}): Scena
           success: resolution.success,
           modelResult: resolution.modelResult,
           ...(resolution.playerResult ? { playerResult: resolution.playerResult } : {}),
-          mutations: resolution.mutations
+          mutations
         }
       }
       const events: KnownGameEvent[] = [resolvedEvent]
@@ -188,9 +219,48 @@ export function createScenarioEngine(options: ScenarioEngineOptions = {}): Scena
               : resolution.output
       }
     },
+    interpretPlayerMessage(
+      rawState: GameState,
+      input: { text: string; turnNumber: number },
+      metadata: { turnId: string }
+    ): PlayerMessageInterpretation {
+      const state = gameStateSchema.parse(rawState)
+      const sequence = state.lastAppliedEventSequence + 1
+      const { matches, appliedRuleIds, mutations } = interpretPlayerTurn(
+        state,
+        input.text
+      )
+      // Emitted every turn, matches or not. The turn-scoped flag resets live in
+      // it, and a per-turn row is what #539 reads to tell "the matcher saw
+      // nothing" apart from "the hook never ran".
+      const event: KnownGameEvent = {
+        id: createEventId({
+          runId: state.runId,
+          sequence,
+          type: 'player.intent.matched'
+        }),
+        runId: state.runId,
+        turnId: metadata.turnId,
+        sequence,
+        timestamp: now(),
+        type: 'player.intent.matched',
+        // Never `agent`. Showing the model `intent: warn_off` would be the
+        // engine telling it how to read the player. §4.6.
+        visibility: ['engine', 'developer'],
+        payload: {
+          turnNumber: input.turnNumber,
+          matcherVersion: PLAYER_INTENT_MATCHER_VERSION,
+          matches,
+          appliedRuleIds,
+          mutations
+        }
+      }
+      return { events: [event], nextState: reduceGameEvent(state, event) }
+    },
     projectForAgent: projectWorldForAgent,
     projectBodyForAgent,
-    projectForPlayer: projectSceneForPlayer
+    projectForPlayer: projectSceneForPlayer,
+    projectVoiceForAgent
   }
 }
 

@@ -2,12 +2,15 @@ import {
   agentBodyViewSchema,
   agentWorldViewSchema,
   playerSceneViewSchema,
+  voiceAssessmentViewSchema,
   type AgentBodyView,
   type AgentWorldView,
   type GameState,
-  type PlayerSceneView
+  type PlayerSceneView,
+  type VoiceAssessmentView
 } from '../../shared'
 import { subjectLabel } from './descriptions'
+import { voiceAssessmentFor } from './relationship'
 import { knownThresholds, roomLabel } from './rooms'
 
 export function projectWorldForAgent(state: GameState): AgentWorldView {
@@ -48,6 +51,23 @@ export function projectBodyForAgent(state: GameState): AgentBodyView {
   })
 }
 
+/**
+ * The fourth projection: the agent's standing read of VOICE. Two names for two
+ * layers on purpose — canonical state is `relationship` (what the engine
+ * tracks), the projection is `voiceAssessment` (what the agent believes). The
+ * projection name is prompt-facing, so it has to read as belief, not a stat
+ * block. Bands only; the schema forbids a number reaching the model. §4.5.
+ */
+export function projectVoiceForAgent(state: GameState): VoiceAssessmentView {
+  return voiceAssessmentViewSchema.parse(voiceAssessmentFor(state))
+}
+
+/**
+ * No relationship value, band, or indicator reaches the player. #530 §4.4 is a
+ * design position, not an oversight: a visible meter turns the relationship
+ * into a resource to be farmed, and the thesis is trust under uncertainty.
+ * The projection boundary makes this the default — do not undo it.
+ */
 export function projectSceneForPlayer(state: GameState): PlayerSceneView {
   const rightHand = state.body.limbs.right_hand
   const rightHandFineManipulationAvailable =

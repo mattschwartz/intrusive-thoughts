@@ -101,6 +101,51 @@ export const noteRecordSchema = z
   .strict()
 export type NoteRecord = z.infer<typeof noteRecordSchema>
 
+export const relationshipAxisNameSchema = z.enum(['competence', 'honesty', 'care'])
+export type RelationshipAxisName = z.infer<typeof relationshipAxisNameSchema>
+
+/** Integer, symmetric, clamped to [-4, +4]. (#530 Part 1.) */
+export const relationshipAxisValueSchema = z.number().int().min(-4).max(4)
+
+export const relationshipStateSchema = z
+  .object({
+    competence: relationshipAxisValueSchema,
+    honesty: relationshipAxisValueSchema,
+    care: relationshipAxisValueSchema
+  })
+  .strict()
+export type RelationshipState = z.infer<typeof relationshipStateSchema>
+
+export const relationshipBandSchema = z.enum([
+  'broken',
+  'negative',
+  'neutral',
+  'positive',
+  'strong'
+])
+export type RelationshipBand = z.infer<typeof relationshipBandSchema>
+
+const bandedAxisSchema = z
+  .object({
+    band: relationshipBandSchema,
+    line: z.string().min(1)
+  })
+  .strict()
+
+/**
+ * The agent's standing read of VOICE. Deliberately carries no numeric field, and
+ * the schema enforces it: show the model a number and it starts optimizing the
+ * number. §4.5.
+ */
+export const voiceAssessmentViewSchema = z
+  .object({
+    competence: bandedAxisSchema,
+    honesty: bandedAxisSchema,
+    care: bandedAxisSchema
+  })
+  .strict()
+export type VoiceAssessmentView = z.infer<typeof voiceAssessmentViewSchema>
+
 export const gameStateSchema = z
   .object({
     runId: runIdSchema,
@@ -114,6 +159,10 @@ export const gameStateSchema = z
     observations: z.array(observationRecordSchema),
     notes: z.array(noteRecordSchema),
     flags: z.record(z.string(), z.boolean()),
+    // `flags` is boolean-only, and the conditioning map is built on per-rule
+    // caps and running tallies. Counters carry those. §4.3.
+    counters: z.record(z.string(), z.number().int().nonnegative()),
+    relationship: relationshipStateSchema,
     lastAppliedEventSequence: z.number().int().nonnegative()
   })
   .strict()

@@ -45,6 +45,7 @@ describe('scripted full-turn integration', () => {
     expect(events.map((event) => event.type)).toEqual([
       'run.started',
       'player.message',
+      'player.intent.matched',
       'context.compiled',
       'agent.tool.requested',
       'agent.tool.rejected',

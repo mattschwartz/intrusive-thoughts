@@ -64,8 +64,18 @@ describe('deterministic kitchen scenario', () => {
       windowThreadTested: false,
       windowTouched: false,
       alleyRoomObserved: false,
-      actOneComplete: false
+      actOneComplete: false,
+      voiceDisclosedHearing: false,
+      voiceDeniedHearing: false,
+      'turn.warnOff': false,
+      'turn.interacted': false,
+      'pending.retreatCheck': false,
+      'pending.retreatArmed': false
     })
+    // Neutral on every axis: the agent starts knowing nothing about a
+    // stranger's voice. Counters start absent, not at zero.
+    expect(state.relationship).toEqual({ competence: 0, honesty: 0, care: 0 })
+    expect(state.counters).toEqual({})
   })
 
   it('publishes exactly the five resolvable tool definitions and authored actions', () => {
@@ -176,8 +186,18 @@ describe('deterministic kitchen scenario', () => {
 
       expect(result.events[0]).toMatchObject({
         type: 'world.action.resolved',
-        payload: { success: false, mutations: [] }
+        payload: { success: false }
       })
+      // A failed resolution changes no world fact. It does carry the
+      // consecutive-failure tally `comp.dead_end` reads, which is bookkeeping,
+      // not a world fact.
+      expect(
+        result.events[0].type === 'world.action.resolved'
+          ? result.events[0].payload.mutations.filter(
+              (mutation) => mutation.kind !== 'counter.set'
+            )
+          : undefined
+      ).toEqual([])
       expect(result.modelResult).toContain('not applicable')
       expect(harness.state.observations).toHaveLength(0)
     }

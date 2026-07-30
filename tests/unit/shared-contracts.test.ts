@@ -64,6 +64,8 @@ function makeState(): GameState {
     flags: {
       windowContradictionKnown: true
     },
+    counters: {},
+    relationship: { competence: 0, honesty: 0, care: 0 },
     lastAppliedEventSequence: 0
   })
 }

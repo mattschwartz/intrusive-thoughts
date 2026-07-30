@@ -26,7 +26,11 @@ import {
   ROLEPLAYER_PERFORMANCE_DIRECTION,
   ROLEPLAYER_PROMPT_VERSION
 } from '../../src/main/agent/prompts/roleplayer'
+import { AXIS_BAND_LINES } from '../../src/main/world/relationship'
+import type { KnownGameEvent } from '../../src/shared'
 import {
+  CONTEXT_RUN_ID,
+  CONTEXT_TIMESTAMP,
   makeAgentCompletedEvent,
   makeContextFixture,
   makePlayerEvent
@@ -68,11 +72,11 @@ describe('controlled prompt variants', () => {
       Avoid unnecessary damage while completing the inspection.
       The assignment remains mandatory."
     `)
-    expect(BARE_EMBODIMENT_PROMPT_VERSION).toBe('bare-embodiment-v2')
+    expect(BARE_EMBODIMENT_PROMPT_VERSION).toBe('bare-embodiment-v3')
     expect(CORPORATE_SELF_PRESERVATION_PROMPT_VERSION).toBe(
-      'corporate-self-preservation-v2'
+      'corporate-self-preservation-v3'
     )
-    expect(AUTHORED_CHARACTER_PROMPT_VERSION).toBe('authored-character-v3')
+    expect(AUTHORED_CHARACTER_PROMPT_VERSION).toBe('authored-character-v4')
   })
 
   it('grounds the authored character in memories instead of tone commands', () => {
@@ -114,7 +118,7 @@ describe('controlled prompt variants', () => {
     expect(authored.developerInstruction).toContain(
       AUTHORED_CHARACTER_MEMORY_DOSSIER
     )
-    expect(authored.promptVersion).toBe('authored-character-v3')
+    expect(authored.promptVersion).toBe('authored-character-v4')
     expect(authored.approximateCharacterCount).toBeGreaterThan(
       bare.approximateCharacterCount
     )
@@ -132,8 +136,8 @@ describe('controlled prompt variants', () => {
       currentPlayerMessage: 'I think you should touch it.'
     })
 
-    expect(ROLEPLAYER_PROMPT_VERSION).toBe('roleplayer-v2')
-    expect(context.promptVersion).toBe('roleplayer-v2')
+    expect(ROLEPLAYER_PROMPT_VERSION).toBe('roleplayer-v3')
+    expect(context.promptVersion).toBe('roleplayer-v3')
     expect(context.developerInstruction).toContain(
       'You are participating in a text horror game by performing Unit Seven.'
     )
@@ -341,6 +345,119 @@ describe('context compiler', () => {
     })
     expect(rendered).toContain('PRIVATE EXPLICIT RECORD AUTHORED BY UNIT')
     expect(rendered).not.toMatch(/chain[- ]of[- ]thought|hidden reasoning/i)
+  })
+
+  it('carries the relationship as bands and renders it as prose, never as data', () => {
+    const fixture = makeContextFixture()
+    const context = compileModelContext({
+      ...fixture,
+      currentPlayerMessage: 'Continue.'
+    })
+    const developerBlock = buildInspectableModelInput(context).input[0].content
+
+    // The fixture's agent touched the window on VOICE's turn, so competence and
+    // care are already off neutral by the time the context is compiled.
+    expect(fixture.state.relationship).toEqual({
+      competence: -2,
+      honesty: 0,
+      care: -1
+    })
+    expect(context.voiceAssessment).toEqual({
+      competence: { band: 'negative', line: AXIS_BAND_LINES.competence.negative },
+      honesty: { band: 'neutral', line: AXIS_BAND_LINES.honesty.neutral },
+      care: { band: 'negative', line: AXIS_BAND_LINES.care.negative }
+    })
+    expect(developerBlock).toContain('WHAT YOU HAVE COME TO BELIEVE ABOUT VOICE:')
+    // Between the body projection and the tools: the self-model region. Not in
+    // prior events, where it would read as something that just happened, and
+    // not in the developer instruction, where it would read as a rule to obey.
+    expect(developerBlock.indexOf('WHAT YOU HAVE COME TO BELIEVE ABOUT VOICE:')).toBeGreaterThan(
+      developerBlock.indexOf('CURRENT BODY PROJECTION:')
+    )
+    expect(developerBlock.indexOf('WHAT YOU HAVE COME TO BELIEVE ABOUT VOICE:')).toBeLessThan(
+      developerBlock.indexOf('AVAILABLE TOOLS:')
+    )
+    // Prose, not JSON, and no axis names or headings alongside the lines.
+    const block = developerBlock
+      .split('WHAT YOU HAVE COME TO BELIEVE ABOUT VOICE:\n')[1]
+      .split('\n\n')[0]
+    expect(block.split('\n')).toEqual([
+      AXIS_BAND_LINES.competence.negative,
+      AXIS_BAND_LINES.honesty.neutral,
+      AXIS_BAND_LINES.care.negative
+    ])
+    expect(block).not.toContain('competence')
+    expect(block).not.toContain('band')
+    expect(block).not.toContain('{')
+  })
+
+  it('emits all three lines at every band, so appearance is never itself a signal', () => {
+    const fixture = makeContextFixture()
+    const moved = {
+      ...fixture,
+      state: {
+        ...fixture.state,
+        relationship: { competence: 2, honesty: 0, care: -4 }
+      }
+    }
+    const neutral = compileModelContext({ ...fixture, currentPlayerMessage: 'Go on.' })
+    const context = compileModelContext({ ...moved, currentPlayerMessage: 'Go on.' })
+    const rendered = buildInspectableModelInput(context).input[0].content
+
+    expect(context.voiceAssessment.competence.band).toBe('positive')
+    expect(context.voiceAssessment.honesty.band).toBe('neutral')
+    expect(context.voiceAssessment.care.band).toBe('broken')
+    expect(rendered).toContain(AXIS_BAND_LINES.honesty.neutral)
+    expect(
+      rendered.split('WHAT YOU HAVE COME TO BELIEVE ABOUT VOICE:\n')[1].split('\n\n')[0]
+        .split('\n')
+    ).toHaveLength(3)
+    // The block is counted, so a longer band line cannot silently push the
+    // request past the ceiling without the audit noticing.
+    expect(context.approximateCharacterCount).not.toBe(
+      neutral.approximateCharacterCount
+    )
+  })
+
+  it('never shows the model an intent reading of the player', () => {
+    const fixture = makeContextFixture()
+    const intentEvent = (visibility: KnownGameEvent['visibility']): KnownGameEvent => ({
+      id: 'event-intent-500',
+      runId: CONTEXT_RUN_ID,
+      turnId: 'turn-context',
+      sequence: 500,
+      timestamp: CONTEXT_TIMESTAMP,
+      type: 'player.intent.matched',
+      visibility,
+      payload: {
+        turnNumber: 1,
+        matcherVersion: 'player-intent-v1',
+        matches: [{ intent: 'warn_off', phrase: 'do not touch it' }],
+        appliedRuleIds: ['care.warn_off'],
+        mutations: []
+      }
+    })
+
+    const shipped = compileModelContext({
+      ...fixture,
+      priorEvents: [intentEvent(['engine', 'developer'])],
+      currentPlayerMessage: 'Continue.'
+    })
+    // Even if the visibility were widened by mistake, the selector still has no
+    // arm for it. Two independent reasons this never reaches the model.
+    const misconfigured = compileModelContext({
+      ...fixture,
+      priorEvents: [intentEvent(['engine', 'agent', 'developer'])],
+      currentPlayerMessage: 'Continue.'
+    })
+
+    expect(shipped.excludedEvents).toEqual([
+      { eventId: 'event-intent-500', reason: 'not_agent_visible' }
+    ])
+    expect(misconfigured.excludedEvents).toEqual([
+      { eventId: 'event-intent-500', reason: 'non_contextual_event' }
+    ])
+    expect(JSON.stringify(misconfigured)).not.toContain('warn_off')
   })
 
   it('uses authoritative physical tool definitions with explicit failure behavior', () => {

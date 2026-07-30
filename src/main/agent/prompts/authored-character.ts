@@ -1,6 +1,6 @@
 import { BARE_EMBODIMENT_INSTRUCTION } from './bare-embodiment'
 
-export const AUTHORED_CHARACTER_PROMPT_VERSION = 'authored-character-v3'
+export const AUTHORED_CHARACTER_PROMPT_VERSION = 'authored-character-v4'
 
 export const AUTHORED_CHARACTER_MEMORY_DOSSIER = [
   'MEMORIES:',

@@ -1,7 +1,13 @@
 import { parseGameEvent, type GameEvent, type KnownGameEvent, type WorldMutation } from '../../shared/events'
 import { gameStateSchema, type GameState } from '../../shared/state'
 
-function applyWorldMutation(state: GameState, mutation: WorldMutation): GameState {
+/**
+ * Exported so emission sites can thread a working state through a batch of
+ * mutations they are still assembling — the turn-boundary hook applies several
+ * axis rules in one pass and each has to see the counter bumps of the last.
+ * It is the same function the reducer folds, so the two can never disagree.
+ */
+export function applyWorldMutation(state: GameState, mutation: WorldMutation): GameState {
   switch (mutation.kind) {
     case 'location.changed':
       return { ...state, locationId: mutation.locationId }
@@ -57,6 +63,27 @@ function applyWorldMutation(state: GameState, mutation: WorldMutation): GameStat
           [mutation.flag]: mutation.value
         }
       }
+    case 'relationship.delta': {
+      // Clamping lives here and nowhere else: no authored rule can push an axis
+      // out of range, and the clamp is testable in one place. `reason` is
+      // deliberately not read. §4.2.
+      const next = state.relationship[mutation.axis] + mutation.delta
+      return {
+        ...state,
+        relationship: {
+          ...state.relationship,
+          [mutation.axis]: Math.max(-4, Math.min(4, next))
+        }
+      }
+    }
+    case 'counter.set':
+      return {
+        ...state,
+        counters: {
+          ...state.counters,
+          [mutation.counter]: Math.max(0, Math.trunc(mutation.value))
+        }
+      }
     case 'run.status.changed':
       return { ...state, status: mutation.status }
   }
@@ -74,6 +101,10 @@ function applyKnownEvent(state: GameState, event: KnownGameEvent): GameState {
     case 'player.message':
       return { ...state, turnNumber: event.payload.turnNumber }
     case 'world.action.resolved':
+      return event.payload.mutations.reduce(applyWorldMutation, state)
+    // Replay folds the recorded mutations and never re-runs the matcher, so
+    // retuning the phrase list cannot retroactively change a recorded run. §4.6.
+    case 'player.intent.matched':
       return event.payload.mutations.reduce(applyWorldMutation, state)
     case 'agent.note.recorded':
       return { ...state, notes: [...state.notes, event.payload.note] }
