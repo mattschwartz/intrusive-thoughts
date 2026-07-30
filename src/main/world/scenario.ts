@@ -75,8 +75,12 @@ export const SCENARIO_COUNTERS = {
  * agent learned by acting. `comp.safe_experiment` (#530 §2.1) pays out when an
  * `interact` sets one of these without costing the body anything.
  *
- * TODO(#536): the Act II tells and TODO(#534): the provenance anchors join this
- * list as they are authored.
+ * TODO(#536): the Act II tells join this list as they are authored.
+ *
+ * The provenance anchors (#534) deliberately do **not** appear here: every one
+ * of them grounds on an observation or on possession, never on a flag, so an
+ * anchor is gathered by looking or by carrying rather than by setting a
+ * discovery flag. See `provenance.ts`.
  */
 export const DISCOVERY_FLAGS: readonly string[] = [
   SCENARIO_FLAGS.windowContradictionKnown,
