@@ -3,13 +3,12 @@ name: "Intrusive Thoughts v1: a confidence-building vertical slice"
 description: "v1 is a 3-room authored vertical slice whose purpose is to de-risk the three mechanics the POC never tested — provenance navigation across rooms, the relationship as a behavior-conditioning system, and one authored death that the player owns — before committing to the full game."
 date_created: 2026-07-30
 author: game-designer
-status: accepted
+status: planned
 reviewers: []
 reviewer_decisions:
   architect: Aligned
   engineer: Aligned
 ---
-
 # Intrusive Thoughts v1: a confidence-building vertical slice
 
 ## Context
