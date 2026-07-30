@@ -2,9 +2,12 @@
 name: "Intrusive Thoughts v1 — architecture specification"
 description: "The structural spec for the v1 vertical slice: provenance validator boundary, thin room-graph substrate, anchor/required-set schema, relationship axes, player-intent matcher, ambient room clock, and terminal authored death. Resolves every decision the accepted proposal routed to the architect."
 date_created: 2026-07-30
+date_amended: 2026-07-30
 author: architect
 proposal: 20260730-v1-vertical-slice
 status: authoritative
+amendments:
+  - "A1 — provenance gate substrate + cited∩gathered ruling (raised by #534)"
 ---
 
 # Intrusive Thoughts v1 — architecture specification
@@ -30,6 +33,33 @@ widen. Field names and types here are normative.
 **What this document does not decide:** authored content — room prose, anchor
 identities, judge rubric, band copy, phrase lists, death tells. Where content
 plugs into structure, this document names the socket and its type.
+
+## Amendments
+
+Sections carry an inline marker where they have been changed since first
+authoring. The record of what changed and why lives here.
+
+**A1 — 2026-07-30, raised by #534, affects §1.1, §1.2, §1.3, §1.4, §1.5, §1.6,
+§1.7, §7 (new R11), §8 (D-2), §9.**
+
+The gate as first specified could not express the predicate #528 authored, and
+the one question #528 routed here — `gathered` vs `cited ∩ gathered` — was never
+answered in writing. Both are now decided:
+
+1. **Sufficiency is dimension- and unit-shaped, not required/supporting-shaped.**
+   `requiredAnchorIds` / `supportingAnchorIds` / `minimumSupporting` are removed
+   and cannot be recovered; §1.3 proves they cannot encode #528 §4.1. Replaced by
+   `dimension` + `unitId` on the anchor and `minimumUnits` on the identity.
+2. **Sufficiency is measured over `cited ∩ gathered`** when a citation set exists,
+   and over `gathered` when one structurally cannot. The mode is recorded on the
+   verdict, not inferred.
+3. `missingHints` is removed; bounce copy is dimension-keyed (#531 §2.4), not
+   anchor-keyed, and §1.7 names its home. `judgeRubric` is removed from the
+   identity and from the judge request; it belongs to the versioned prompt (§1.3).
+4. `assertedTargetId` joins the judge result and the verdict event; the bounce
+   reason enum gains `target_unresolved` and loses `not_addressable`.
+5. **The bounce read-back renders from `effectiveAnchorIds`, never from
+   `citedAnchorIds`** — a correction to #531 §2.4 and #528 §4.5, argued in §1.7.
 
 ---
 
@@ -106,8 +136,16 @@ hold by construction rather than by convention:
 > flags, or any indication of which anchors the player actually holds.
 
 The judge therefore *cannot* declare sufficiency — not because we tell it not to,
-but because it lacks the input. Prompt injection against the judge can at worst
-flip `coherent` to `true`, which cannot open a threshold the gate rejected.
+but because it lacks the input.
+
+**The bound on a fully compromised judge, stated exactly** *(A1, now that the judge
+returns three fields rather than one)*: injection can flip `coherent` to `true`,
+inflate `citedAnchorIds` to the whole catalog, and assert the correct target. Run
+those three through §1.4's request-validation and §1.1a's intersection and the
+result is `effective = gathered` — which is the gathered-only fallback, the same
+permissiveness we already accept during an outage. **A judge that has been entirely
+turned against us cannot do worse than not being there.** That is the property to
+protect on every future change to this surface.
 
 > **The engine recomputes the gate itself when it records the verdict.** The loop
 > may run the gate in advance to decide whether a judge call is worth making, but
@@ -121,13 +159,70 @@ outcome and no gate result; `JudgeGateway.judge` takes a claim and no state.
 The final outcome is a conjunction, and the judge is **downgrade-only**:
 
 ```
-opened  ⟺  gate.verdict === 'sufficient'  ∧  judge.status ≠ 'incoherent'
+opened  ⟺  gate.verdict === 'sufficient'
+        ∧  judge.status ≠ 'incoherent'
+        ∧  judge target matches the threshold's identity, when a judge ran   ← A1
 ```
 
 Note `≠ 'incoherent'` rather than `=== 'coherent'`: a judge that was skipped or
 unavailable passes through (rationale in §1.4).
 
-### 1.2 Shared types (`src/shared/provenance.ts`)
+### 1.1a Where sufficiency is measured — CONFIRMED: `cited ∩ gathered` *(A1)*
+
+**Decision: #528 §5's recommendation is adopted. Sufficiency is measured over
+`cited ∩ gathered`. The fallback in §5 — gate on `gathered` alone — is rejected as
+the normal path and retained only as the structurally-forced path described
+below.**
+
+The argument that decides it is #528's own, and it is short enough to restate:
+citation extraction can only ever **narrow** an engine-authoritative set.
+Intersection is monotone-decreasing in the model's output, so the worst an
+adversarial claim achieves is to have the judge over-report citations of anchors
+the player **already really holds** — which the player could have obtained by
+typing their names. No model output can add an anchor to the set. The invariant
+in §1.1 holds unchanged: *a coherent verdict cannot upgrade a set the gate
+rejected.*
+
+What tips it past "safe but optional" is measurement validity. Under
+`gathered`-only, a player who explores exhaustively and types *"bedroom, I guess"*
+opens the ending, which makes Gap 1's confidence criterion — *players build cases
+from gathered anchors rather than brute-forcing* — untestable by construction.
+The instrument would be measuring visiting.
+
+The gate therefore **splits rather than reorders**, and the ordering rule above is
+untouched:
+
+```
+pure pre-gate   gathered  = anchors canonical state grounds        (engine-authoritative)
+judge           extract assertedTargetId + citedAnchorIds; judge form
+pure post-gate  effective = cited ∩ gathered                       (engine-authoritative)
+                verdict   = sufficient(effective)
+```
+
+**Two modes, and the mode is recorded, not inferred.** A citation set does not
+always exist: `previewAddress` runs before the judge is called, and a `skipped` or
+`unavailable` judge produces none. In those cases the gate measures over
+`gathered`. That is the fail-open path §1.4 requires — the security property lives
+in `gathered`, so a provider blip must not make the only ending unreachable — and
+it is **more permissive than the normal path, not less**. Every gate result
+therefore carries `measuredOver: 'cited' | 'gathered'` (§1.3), and #539 filters on
+it. See risk R11: an `unavailable` judge does not merely lose a quality filter, it
+silently changes what sufficiency means for that address.
+
+What `executeAddress` passes, exhaustively, by judge status:
+
+| `judge.status` | `presentedAnchorIds` | `measuredOver` | Target match enforced? |
+|---|---|---|---|
+| `coherent` | `judge.citedAnchorIds` | `cited` | **yes** — mismatch or `null` bounces `target_unresolved` |
+| `incoherent` | `judge.citedAnchorIds` | `cited` | no — the outcome is already `bounced`; the gate result and the target are recorded as diagnosis |
+| `skipped` | omitted | `gathered` | no — no judge ran |
+| `unavailable` | omitted | `gathered` | no — no judge ran |
+
+An explicitly empty citation array is **not** the same as an absent one:
+`[]` measures over `cited` and yields `unsupported`; absent measures over
+`gathered`. This distinction is load-bearing and must be pinned by a test.
+
+### 1.2 Shared types (`src/shared/provenance.ts`) *(amended A1)*
 
 ```ts
 import { z } from 'zod'
@@ -137,30 +232,113 @@ export const anchorIdSchema = serializableIdSchema
 export const provenanceIdentityIdSchema = serializableIdSchema
 export const thresholdIdSchema = serializableIdSchema
 
+/** The three evidentiary dimensions (#528 §2). Vocabulary, not content. */
+export const provenanceDimensionSchema = z.enum(['what', 'who', 'binding'])
+
+/** Fixed emission order. #531 §2.4 emits one bounce line per missing dimension
+ *  in exactly this sequence, so the gate reports them ordered rather than
+ *  leaving each caller to sort. */
+export const PROVENANCE_DIMENSION_ORDER = ['what', 'who', 'binding'] as const
+
 /** Engine-authoritative sufficiency. The sole authority on evidence. */
 export const provenanceGateVerdictSchema = z.enum([
-  'sufficient',   // all required anchors gathered AND supporting minimum met
-  'partial',      // at least one relevant anchor gathered, but not enough
-  'unsupported'   // no relevant anchor gathered — the "fabricated" case
+  'sufficient',   // every gating dimension covered by effective evidence
+  'partial',      // at least one effective anchor, but the case does not close
+  'unsupported'   // nothing effective — the "fabricated" case
 ])
 
 /** Bounded judge outcome. May only downgrade. */
 export const provenanceJudgeStatusSchema = z.enum([
   'coherent',
   'incoherent',
-  'skipped',      // gate said unsupported / threshold not addressable — never called
+  'skipped',      // gathered-only preview said unsupported — never called
   'unavailable'   // called and failed: timeout, transport error, unparseable output
 ])
 
 export const provenanceOutcomeSchema = z.enum(['opened', 'bounced'])
 export const provenanceBounceReasonSchema = z.enum([
-  'not_addressable',
+  'target_unresolved',      // no catalog target named, or a different one
   'insufficient_evidence',
   'incoherent_claim'
 ])
 ```
 
-### 1.3 The gate (pure, `src/main/world/provenance.ts`)
+**`not_addressable` is removed** *(A1)*. It described a state in which no identity
+resolved — and an address at a threshold that answers to no identity produces an
+ordinary tool failure, not a verdict. See §1.6: the verdict event is emitted **iff
+an identity resolved**, which is what lets its `gate` object stay required and the
+record stay readable.
+
+**The gate result shape is a shared schema, not a hand-mirrored one** *(A1)*:
+
+```ts
+export const provenanceDimensionAssessmentSchema = z.object({
+  dimension: provenanceDimensionSchema,
+  requiredUnits: z.number().int().nonnegative(),
+  satisfiedUnitIds: z.array(z.string().min(1)),
+  satisfied: z.boolean()
+}).strict()
+
+export const provenanceGateResultSchema = z.object({
+  verdict: provenanceGateVerdictSchema,
+  measuredOver: z.enum(['cited', 'gathered']),
+  gatheredAnchorIds: z.array(anchorIdSchema),
+  effectiveAnchorIds: z.array(anchorIdSchema),
+  dimensions: z.array(provenanceDimensionAssessmentSchema),
+  missingDimensions: z.array(provenanceDimensionSchema),
+  candidateAnchorIds: z.array(anchorIdSchema),
+  rulesetVersion: z.string().min(1)
+}).strict()
+
+export type ProvenanceGateResult = z.infer<typeof provenanceGateResultSchema>
+```
+
+`AddressGateResult` in `src/main/world/provenance.ts` **is** `ProvenanceGateResult`
+— an alias, not a copy — and §1.6's event embeds `provenanceGateResultSchema`
+verbatim. One shape, one definition. The compiler now enforces what a mirrored
+pair of declarations only asked politely for, and the drift that produced this
+amendment cannot recur through the same door.
+
+Nothing content-shaped crosses into `src/shared/` by this: no anchor id literal,
+no label, no minimum, no pairing. The dimension enum is vocabulary the persisted
+record needs, in the same class as the verdict enum that was already here.
+
+### 1.3 The gate (pure, `src/main/world/provenance.ts`) *(replaced by A1)*
+
+**The required/supporting model specified here originally is withdrawn. It cannot
+express the predicate #528 §4.1 authored, and the proof is short enough that it
+belongs in the record rather than in a task comment.**
+
+#528 §4.1 is disjunctive and dimension-shaped:
+
+```
+STRONG(E) ⟺ (∃ a ∈ E : dim(a) = what)
+          ∧ (∃ a ∈ E : dim(a) = who)
+          ∧ (B1 ⊆ E ∨ B2 ⊆ E)
+```
+
+Suppose some `(R, S, m)` — required set, supporting set, minimum — encodes it, so
+that `STRONG(E) ⟺ R ⊆ E ∧ |E ∩ S| ≥ m`.
+
+1. `A = {crayon_drawing, birthday_banner, height_marks, party_scorecard}` and
+   `B = {night_light, party_favor, sixth_setting, party_photos}` are both strong
+   and **disjoint**. `R ⊆ A` and `R ⊆ B` force `R = ∅`, so sufficiency reduces to
+   the threshold `|E ∩ S| ≥ m`.
+2. `A` is minimal — every 3-element subset of it is weak. Under a pure threshold
+   that forces two things. `|A ∩ S| = m` exactly, since dropping any counted
+   member would otherwise leave a weak subset still at or above `m`. And `A ⊆ S`,
+   since a member of `A` outside `S` could be dropped without lowering the count
+   at all, making a weak subset strong. The same holds for `B`, and every one of
+   the eight anchors sits in some minimal strong set, so `S` = all eight and
+   `m = 4`.
+3. But then `C = {crayon_drawing, night_light, birthday_banner, party_favor}` has
+   `|C ∩ S| = 4 ≥ m` and is admitted — and `C` contains no complete binding pair,
+   so #528 §4.1 rejects it. Contradiction. ∎
+
+The engineer's reasoning on #534 is confirmed exactly, including the
+counter-example. No assignment exists; there was never a version of this to find.
+
+#### The substrate: dimensions and evidence units — CONFIRMED
 
 ```ts
 export type AnchorEvidenceRule =
@@ -170,60 +348,132 @@ export type AnchorEvidenceRule =
 
 export interface AnchorDefinition {
   id: string                  // stable, frozen once authored — see risk R5
-  label: string               // player/judge-facing, e.g. "a hand-lettered banner"
+  label: string               // the anchor in the agent's mouth — see below
+  dimension: ProvenanceDimension        // exactly one; never counts twice
+  unitId?: string             // shared id ⇒ one conjunctive unit; absent ⇒ own unit
   trueRoomId: string          // the provenance claim: where this belonged
   presentInRoomId: string     // where the player finds it now
+  displaced: boolean          // came out of the reconstructed room (#528 §7)
   evidence: AnchorEvidenceRule
 }
 
 export interface ProvenanceIdentityDefinition {
-  id: string                  // e.g. 'childs_bedroom'
+  id: string                  // e.g. 'iris_bedroom'
   label: string
-  requiredAnchorIds: readonly string[]     // ALL must be gathered for 'sufficient'
-  supportingAnchorIds: readonly string[]   // corroboration
-  minimumSupporting: number
-  judgeRubric: string                      // authored; passed verbatim to the judge
-  missingHints: Readonly<Record<string, string>>  // anchorId → authored nudge prose
+  anchorIds: readonly string[]                            // every id must resolve
+  minimumUnits: Readonly<Record<ProvenanceDimension, number>>   // 0 ⇒ does not gate
 }
 
 export const PROVENANCE_RULESET_VERSION = 'provenance-ruleset-v1'
 ```
 
-Those three knobs — `requiredAnchorIds`, `supportingAnchorIds`,
-`minimumSupporting` — exist so #539 can tune open question Q5 ("are three anchors
-enough?") without a schema change. Bump `PROVENANCE_RULESET_VERSION` on any
-change, so an older run's recorded verdict stays interpretable.
+The predicate, stated once:
+
+```
+unit(a)       = a.unitId ?? a.id
+closed(u, E)  = every anchor of unit u is in E          // conjunctive
+sufficient(E) ⟺ ∀ d ∈ dimensions :
+                   |{ u : dim(u) = d ∧ closed(u, E) }| ≥ minimumUnits[d]
+```
+
+**One authored label, two consumers.** `label` is both the judge's anchor-catalog
+label (#528 §9.2) and the read-back label in the agent's mouth (#531 §2.4). It is
+one field on purpose: if the two diverged, a player could hear one name and have
+the judge resolve another, and R9's failure mode — a miss that reads as the game
+not listening — would arrive through the provenance surface as well.
+
+**`judgeRubric` is off the identity** *(A1)*. #528 §9 is one document describing
+the judge's whole contract — its three questions, its prohibitions, its worked
+examples — not a per-room string. It belongs to the judge prompt and is versioned
+by `promptVersion` (§1.4), where a change to it is already recorded on every
+verdict. The identity contributes `id` and `label` to the request and nothing
+else; `JudgeGatewayRequest.identity` loses its `rubric` field to match. If a second
+identity is ever authored whose *matching* rules genuinely differ, `rubric` comes
+back onto the identity then — the same discipline as R7: generalize at two, not
+at one.
+
+**What this substrate can and cannot express, stated as a boundary rather than
+discovered later.** It expresses any predicate of the form *AND over dimensions of
+(a threshold over conjunctive units)*. That covers every tuning direction #528 §8
+names, each as a data edit with no code change:
+
+| §8 direction | The edit |
+|---|---|
+| Relax `binding` to either half of a pair | drop `unitId` from the four binding anchors |
+| Require both pairs (minimum 6) | `minimumUnits.binding = 2` |
+| Require two `what` anchors | `minimumUnits.what = 2` |
+| Drop a dimension from the gate | `minimumUnits.d = 0` |
+
+It **cannot** express disjunction *across* dimensions — "two `what` anchors, or one
+`who`" has no encoding here. That is deliberate: such a predicate would mean the
+three dimensions are no longer independent claims, which is a change to what
+addressing *means*, not a tuning pass. If one is ever proposed, it comes back
+through design, not through a schema patch.
+
+Bump `PROVENANCE_RULESET_VERSION` on any change to the catalog, the pairings, or
+the minimums, so an older run's recorded verdict stays interpretable.
+
+#### The result
 
 ```ts
-export interface AddressGateResult {
-  verdict: ProvenanceGateVerdict
-  requiredAnchorIds: string[]
-  gatheredAnchorIds: string[]      // relevant anchors the player actually holds
-  missingAnchorIds: string[]
-  supportingGatheredCount: number
-  supportingRequiredCount: number
-  rulesetVersion: string
+export type AddressGateResult = ProvenanceGateResult   // the §1.2 schema, aliased
+
+export interface AddressGateOptions {
+  /** judge.citedAnchorIds. Absent ⇒ measure over `gathered` (§1.1a). */
+  presentedAnchorIds?: readonly string[]
 }
 
 export function isAnchorGathered(state: GameState, anchor: AnchorDefinition): boolean
 export function evaluateAddressGate(
   state: GameState,
-  identity: ProvenanceIdentityDefinition
+  identity: ProvenanceIdentityDefinition,
+  options?: AddressGateOptions
 ): AddressGateResult
 ```
 
 Rules, in order:
 
-1. `gathered` = every anchor in `required ∪ supporting` whose `evidence` rule holds
-   against canonical state.
-2. `sufficient` iff `required ⊆ gathered` **and**
-   `|gathered ∩ supporting| ≥ minimumSupporting`.
-3. else `partial` iff `|gathered| ≥ 1`.
-4. else `unsupported`.
+1. `gathered` = catalog anchors whose `evidence` rule holds against canonical
+   state. `effective` = `gathered`, narrowed by `presentedAnchorIds` if supplied.
+2. A dimension is satisfied when at least `minimumUnits[d]` of its units are
+   **wholly** contained in `effective`.
+3. `sufficient` iff every gating dimension is satisfied.
+4. else `partial` iff `|effective| ≥ 1`.
+5. else `unsupported`.
+
+Note steps 4 and 5 read `effective`, not `gathered`: the verdict describes the
+*address*, not the player's shelf. What the player holds is recorded separately and
+is what makes a citation-extraction failure visible.
+
+**Field decisions, since a persisted record is a promise about meaning:**
+
+- `dimensions` carries **all three** assessments every time, including non-gating
+  ones (`requiredUnits: 0`). Carrying `requiredUnits` makes the record
+  self-describing: a reviewer reads an old verdict and knows what bar it was held
+  to without going to find the code at that ruleset version. That is what
+  `rulesetVersion` was reaching for, done properly. `satisfiedUnitIds` names
+  *which* binding pair closed — a Gap 1 read in its own right.
+- `candidateAnchorIds` replaces `missingAnchorIds` **and the rename is required**.
+  Under a disjunctive predicate its meaning changed: it is now "anchors that could
+  still cover an uncovered dimension," not "mandatory anchors the player lacks."
+  A field named `missing` in a persisted record will be read months later as *the
+  player needed all of these*, which is false — they need one, or one pair. That is
+  the same class of lie as the three fields this amendment deleted, and it does not
+  get to survive on the grounds that the doc comment explains it.
+- `requiredAnchorIds`, `supportingGatheredCount`, `supportingRequiredCount` are
+  **deleted**. They have no referent under this predicate. The engineer's judgment
+  to drop rather than fake them is upheld: a persisted record that carries a field
+  it cannot mean is worse than one that carries less.
+- `measuredOver` is **added** (§1.1a). Without it, `effective === gathered` is
+  ambiguous — it can mean "measured over everything gathered" or "cited exactly
+  what they held" — and #539 cannot filter Gap 1 reads without joining against
+  judge status and knowing this rule by heart.
 
 Pure, synchronous, total, no model. This function carries build done-when #2's
 anti-cheat guarantee and must be unit-tested directly against hand-built states —
-not only through the loop.
+not only through the loop. The exhaustive test #534 wrote — every subset of the
+catalog cited against a state one anchor short, none of which opens the gate — is
+the right shape for that guarantee and should be kept as the catalog grows.
 
 ### 1.4 The judge gateway (`src/main/agent/judge-gateway.ts`)
 
@@ -233,14 +483,15 @@ are configured and inspected the same way.
 ```ts
 export interface JudgeGatewayRequest {
   claim: string                                    // untrusted player-derived prose
-  identity: { id: string; label: string; rubric: string }
+  identity: { id: string; label: string }          // A1 — rubric moved to the prompt
   anchorCatalog: ReadonlyArray<{ id: string; label: string }>
   signal: AbortSignal
 }
 
 export interface JudgeGatewayResult {
   coherent: boolean
-  citedAnchorIds: string[]   // ids from anchorCatalog the claim actually cites
+  assertedTargetId: string | null   // A1 — the identity the claim names, or null
+  citedAnchorIds: string[]          // ids from anchorCatalog the claim actually cites
   reason: string             // short, developer-only. Never shown to player or agent.
 }
 
@@ -251,6 +502,10 @@ export interface JudgeGateway {
 }
 ```
 
+**`assertedTargetId` is added by A1**, at #528 §5's explicit request. #531 §2.4
+authors two distinct incoherent bounce lines — *target named* and *no target* —
+and a target-unresolved line, and none of the three can be selected without it.
+
 Hardening requirements on the implementation:
 
 - `claim` is truncated to 2 000 characters *before* the call and delivered inside
@@ -258,6 +513,15 @@ Hardening requirements on the implementation:
 - The response is parsed with a strict Zod schema. Any parse failure, transport
   error, abort, or timeout yields `status: 'unavailable'` — never a thrown error
   that fails the turn. **A judge outage must not break the run.**
+- **Both id-bearing fields are resolved against the request the gateway itself
+  sent, before the result crosses inward** *(A1)*. `assertedTargetId` that does not
+  equal `request.identity.id` becomes `null`; `citedAnchorIds` is filtered to ids
+  present in `request.anchorCatalog`. This is not defensive tidiness: these fields
+  land in a persisted event and, through the read-back, in prose the agent speaks.
+  An unfiltered id is a model-authored string in the event log and a label lookup
+  that resolves to nothing in the agent's mouth. The gateway validates against its
+  own request rather than importing the registry, so the check needs no dependency
+  on `src/main/world/`.
 - `reason` is developer-visibility only. It never reaches `modelResult`,
   `playerResult`, or the compiled context. The judge writes no player-facing
   prose; that is the whole line between validation and generation.
@@ -328,16 +592,20 @@ export interface AddressPreview {
 }
 
 export type JudgeOutcome =
-  | { status: 'coherent' | 'incoherent'; citedAnchorIds: string[]; reason: string;
+  | { status: 'coherent' | 'incoherent'; assertedTargetId: string | null;
+      citedAnchorIds: string[]; reason: string;
       model: string; promptVersion: string; latencyMs: number }
   | { status: 'skipped' | 'unavailable'; reason: string }
 ```
+
+*(A1: `assertedTargetId` added to the judged arm. The two unjudged statuses carry
+no target and no citations — which is exactly why they measure over `gathered`.)*
 
 The loop's dispatch, at the single existing tool-execution site:
 
 ```
 if (knownTool.data === 'address') {
-  preview = engine.previewAddress(state, args)                       // pure
+  preview = engine.previewAddress(state, args)                       // pure, gathered-only
   judge = (!preview.addressable || preview.gate.verdict === 'unsupported')
     ? { status: 'skipped', reason: … }                               // no model call
     : await this.judge?.judge({ … }) ?? { status: 'unavailable', … } // async, bounded
@@ -347,11 +615,22 @@ if (knownTool.data === 'address') {
 }
 ```
 
+*(A1: `previewAddress` measures over `gathered` — no citation exists yet — so the
+skip test is "this player has grounded nothing at all," which is the strongest
+engine-side test available before the judge runs. `!preview.addressable` still
+short-circuits here, but it now produces a plain tool failure and **no verdict
+event**; see §1.6.)*
+
 Three consequences worth stating plainly:
 
-- Skipping the judge when the gate says `unsupported` means gate-first is enforced
-  by *call ordering*, not only by authority. A fabricated claim never reaches a
-  model at all.
+- Skipping the judge when the gathered-only gate says `unsupported` means
+  gate-first is enforced by *call ordering*, not only by authority. **A claim from
+  a player who has grounded no evidence at all never reaches a model.** *(A1: the
+  original sentence said "a fabricated claim," which is now too strong. Under
+  §1.1a, F2 — invented anchors cited by a player who has gathered real ones — does
+  reach the judge, because only citation extraction can establish that the claim
+  resolves to nothing. It still cannot open anything: the intersection is empty and
+  the gate returns `unsupported`.)*
 - `JudgeGateway` is **optional** on `AgentLoopOptions`. When absent, every address
   records `status: 'unavailable'`. That is what keeps the existing agent-loop test
   suite compiling unchanged. `RunController` always injects one via a
@@ -363,7 +642,7 @@ Three consequences worth stating plainly:
 Judge timeout gets its own budget in `loop-limits.ts` (`judgeTimeoutMs`, default
 20 000) and composes with the turn abort signal.
 
-### 1.6 The verdict event
+### 1.6 The verdict event *(amended A1)*
 
 ```ts
 export const provenanceAddressEvaluatedEventSchema = eventSchema(
@@ -374,17 +653,10 @@ export const provenanceAddressEvaluatedEventSchema = eventSchema(
     thresholdId: thresholdIdSchema,
     identityId: provenanceIdentityIdSchema,
     claimText: z.string().max(2_000),
-    gate: z.object({
-      verdict: provenanceGateVerdictSchema,
-      requiredAnchorIds: z.array(anchorIdSchema),
-      gatheredAnchorIds: z.array(anchorIdSchema),
-      missingAnchorIds: z.array(anchorIdSchema),
-      supportingGatheredCount: z.number().int().nonnegative(),
-      supportingRequiredCount: z.number().int().nonnegative(),
-      rulesetVersion: z.string().min(1)
-    }).strict(),
+    gate: provenanceGateResultSchema,          // §1.2 — embedded verbatim
     judge: z.object({
       status: provenanceJudgeStatusSchema,
+      assertedTargetId: provenanceIdentityIdSchema.nullable().default(null),
       citedAnchorIds: z.array(anchorIdSchema).default([]),
       reason: z.string(),
       model: z.string().min(1).optional(),
@@ -397,12 +669,40 @@ export const provenanceAddressEvaluatedEventSchema = eventSchema(
 )
 ```
 
+**The `gate` object is the `AddressGateResult` verbatim.** #535 records what
+`evaluateAddressGate` returned and does not reshape, subset, or re-derive it. This
+is why §1.2 puts the shape in `src/shared/` as a schema rather than leaving the
+event and the function to describe the same thing twice — that duplication is what
+let the two drift far enough apart to need this amendment.
+
+**Emission condition** *(A1)*: the verdict event is emitted **iff an identity
+resolved** — that is, the threshold is addressable and declares one. An address at
+a threshold that answers to no identity is an ordinary tool failure with a
+`success: false` resolution and no verdict, because a verdict with no gate object
+is not a verdict. `addressAttempts` for #538 counts `tool.call` events, which are
+recorded either way.
+
+**Bounce reason precedence**, in this order, and the order is load-bearing:
+
+1. `incoherent_claim` — `judge.status === 'incoherent'`.
+2. `target_unresolved` — `assertedTargetId` is `null` or is not the threshold's
+   identity. (Only checked when a judge ran; §1.1a.)
+3. `insufficient_evidence` — the gate did not return `sufficient`.
+
+**Target outranks evidence because the alternative is an oracle.** A player who
+addresses the wrong room and hears which *dimension* is thin has been told that
+some other room's case exists and is nearly made. #531 §2.4 emits the
+target-unresolved line **alone** in that case — no dimension lines — and #528 §4.4
+is the rule it is honouring. The gate result is still computed and recorded; it is
+developer-visible, which is precisely what lets us record the diagnosis without
+speaking it.
+
 **Visibility: `['engine', 'developer']`.** Not agent, not player. The event carries
-`missingAnchorIds` and the full required set — the answer key. The agent learns
-the outcome through `world.action.resolved.modelResult` (authored prose built from
-`missingHints`); the player through `playerResult`. If this event were
-agent-visible, the context compiler would feed the answer key back to the model
-and Gap 1 would measure nothing.
+`candidateAnchorIds`, the per-dimension assessment, and the full gathered set — the
+answer key. The agent learns the outcome through
+`world.action.resolved.modelResult` (authored bounce prose, §1.7); the player
+through `playerResult`. If this event were agent-visible, the context compiler
+would feed the answer key back to the model and Gap 1 would measure nothing.
 
 **The verdict event carries no mutations and the reducer does not act on it.** All
 state consequences (threshold-opened flag, axis deltas, observations) ride on the
@@ -445,9 +745,47 @@ Two things the tool deliberately does **not** do:
   whether the prose asserts that identity. Offering the model a menu of identity
   ids would turn "reconstruct what this room was" into "pick a door" — the exact
   feel Gap 1 exists to test. **This is the load-bearing content decision in §1.**
-- **It does not return anchor ids.** The output message is authored prose assembled
-  from `missingHints`. Returning ids would let the model parrot the answer key back
-  to the player.
+- **It does not return anchor ids.** The output message is authored prose (see
+  below). Returning ids would let the model parrot the answer key back to the
+  player.
+
+#### The bounce copy has one home *(A1)*
+
+`missingHints: Record<anchorId, string>` is **deleted**. It was keyed per anchor,
+and #531 §2.4's final copy is keyed per *missing dimension* plus a read-back — a
+different shape, and #528 §4.4 forbids naming an anchor in bounce feedback at all.
+
+Assembly is one pure function in `src/main/world/`, called by `executeAddress`,
+producing the `modelResult` string:
+
+```ts
+renderAddressBounce(gate: AddressGateResult, judge: JudgeOutcome): string
+```
+
+It is the **only** consumer of `AnchorDefinition.label` for player-facing prose,
+and #535 must not build a second one in the loop. Its inputs are the gate result,
+the bounce reason, and `assertedTargetId`; its output is `[read-back] + [verdict
+line]` per #531 §2.4.
+
+> **The read-back renders from `effectiveAnchorIds`, never from
+> `citedAnchorIds`.** *(A1 — this corrects #531 §2.4 and #528 §4.5, both of which
+> say `citedAnchorIds`; neither had an `effective` set to name when they were
+> written.)*
+
+The reason is not cosmetic. Suppose a player cites the banner and has never
+observed it. Read-back from `citedAnchorIds` puts *"I presented the banner"* in the
+agent's mouth — a sentence that is false in fiction, since the agent is holding
+nothing of the kind, and an **oracle**, since it confirms to a player who has never
+found the banner that a thing by that name exists in the world. That is the precise
+failure §4.4 exists to prevent, arriving through the one line of copy written to
+build trust.
+
+Rendered from `effectiveAnchorIds`, the same address produces #531's zero-resolved
+line — *"It didn't take hold of anything… Whatever you're pointing at, I don't
+think I have it."* — which routes the denial entirely through the agent's own
+limits, reveals nothing, and is true. The authored copy already handles this case
+correctly; only its stated input was wrong. The verdict event keeps both sets, so
+a reviewer can still see exactly what was cited and what it narrowed to.
 
 The tool is **always available** (`body.tools.address = { available: true }` from
 turn one). Addressing a non-addressable threshold fails before the gate, costing
@@ -711,8 +1049,10 @@ reaches 2.
 Shapes are in §1.3. What matters at the boundary between authored content (#528)
 and the gate (#534):
 
-**What content owns:** the anchor catalog, the identity definitions, the rubric,
-the `missingHints` prose, and which room each anchor is displaced into.
+**What content owns:** the anchor catalog, each anchor's dimension and pairing,
+the identity definitions and their `minimumUnits`, the rubric, the bounce copy
+(#531 §2.4), and which room each anchor is displaced into. *(A1: `missingHints`
+was here and is deleted; §1.7.)*
 
 **What structure guarantees:**
 
@@ -727,7 +1067,12 @@ the `missingHints` prose, and which room each anchor is displaced into.
   anchors map cleanly: the banner is `carried` (or `flag: bannerTakenDown`), the
   star is `carried`, the date is `observed(party_table, visual)`. A fourth case
   means a new authored mechanic, which is a design decision.
-- A room's required set is expressed on the **identity**, not the room.
+- A room's required set is expressed on the **identity**, not the room — and after
+  A1 it is expressed as `minimumUnits` over dimensions, with the pairings carried
+  by the anchors' `unitId`s. Cross-room synthesis is therefore enforced by
+  *content* (both members of every binding pair sit in different rooms) rather
+  than by a rule that says "go somewhere else." Nothing in the engine knows that
+  the address must span two rooms, and nothing should.
 
 **Anchor ids are frozen once authored.** They appear in persisted verdict events;
 a rename silently detaches recorded runs from their evidence (risk R5). #529 marks
@@ -1101,7 +1446,10 @@ so nobody discovers a site at 2am.
    inline state in unit tests. Mechanical, Zod- and compiler-guided.
 
 **`src/shared/provenance.ts`** (new)
-7. Verdict/status/outcome enums and id schemas (§1.2).
+7. Verdict/status/outcome/bounce enums and id schemas, plus
+   `provenanceDimensionSchema`, `PROVENANCE_DIMENSION_ORDER`,
+   `provenanceDimensionAssessmentSchema` and `provenanceGateResultSchema` (§1.2,
+   amended A1).
 
 **`src/shared/events.ts`**
 8. `worldMutationSchema` += `relationship.delta` and `counter.set`.
@@ -1223,6 +1571,34 @@ code. *Mitigation:* the three steps are separate named functions called in
 sequence, with the ordering constraint stated in a comment and pinned by a test
 that would fail if reset ran before lagged evaluation.
 
+**R11 — An unavailable judge silently changes what sufficiency means** *(A1)*.
+Under §1.1a the normal path measures over `cited ∩ gathered`; a `skipped` or
+`unavailable` judge measures over `gathered`, which is **strictly more
+permissive**. So a judge outage does not merely lose the coherence filter, as R1
+says — it converts the address from *did they build a case* into *did they visit
+everything*, which is the exact degradation #528 §5 refused as a default. Worse,
+a player could in principle induce it, by crafting a claim that makes the judge
+time out or emit unparseable output.
+
+The anti-cheat guarantee is untouched in both modes — nothing opens on evidence
+that was never gathered, and #534's exhaustive-subset test proves it — so this is
+a measurement-validity risk, not a security one. *Mitigation:* `measuredOver` is
+recorded on every verdict, so the degradation is visible in the log rather than
+inferred. **#539 must exclude `measuredOver: 'gathered'` addresses from the Gap 1
+read entirely, not caveat them** — that is a stronger obligation than R1's "check
+the field," and it is the reason the field exists. If outages turn out to be
+common enough that exclusion costs real sample size, the fix is judge reliability
+(retry, smaller model, D-3), not loosening the rule.
+
+**R12 — `previewAddress` and `executeAddress` can disagree, legitimately** *(A1)*.
+The preview measures over `gathered`; the authoritative pass usually measures over
+`cited ∩ gathered`. A preview of `partial` followed by an authoritative
+`unsupported` is **correct**, not a bug — it is the F2 case, a player citing things
+they do not hold. *Mitigation:* §1.1's rule already forbids the loop from passing
+its preview result inward, so the disagreement cannot corrupt anything; it is
+recorded here so nobody "fixes" the divergence by making the preview authoritative,
+which would put a model-narrowed set on the wrong side of the seam.
+
 ---
 
 ## §8 — Open decisions routed out
@@ -1236,11 +1612,13 @@ matcher. That is the designer's call and it is a good reason. **Accepted.** The
 matcher has a home in §4.6, with the replay and audit guarantees that make it
 survivable. Residual risk is R9, named rather than hidden.
 
-### D-2 — Anchor counts and required-set size. (→ game-designer, #528/#539)
+### D-2 — Anchor counts and required-set size. (→ game-designer, #528/#539) *(amended A1)*
 
-Proposal Q5. Structure imposes no answer: tune `requiredAnchorIds`,
-`supportingAnchorIds`, `minimumSupporting`, then bump
-`PROVENANCE_RULESET_VERSION`. No schema change for any tuning pass.
+Proposal Q5. Structure imposes no answer: tune `minimumUnits` on the identity and
+`unitId` on the anchors, then bump `PROVENANCE_RULESET_VERSION`. No schema change
+and no code change for any tuning pass #528 §8 names — the table in §1.3 maps each
+of its four directions onto one data edit. The one thing tuning **cannot** reach is
+disjunction across dimensions; that comes back through design (§1.3).
 
 ### D-3 — Judge model and provider. (→ engineer + user, #535)
 
@@ -1277,18 +1655,20 @@ not a one-room quirk; that is a content-consistency call, not mine.
 |---|---|---|
 | #532 room-graph, address plumbing, kitchen migration | this doc | §2.1–2.6, §6 items 1–4, 12, 14–18 |
 | #533 relationship axes | this doc, #530 | §4 (all), §6 items 5–6, 8, 13, 19, 22–24 |
-| #534 provenance gate | this doc, #528 | §1.3, §3 |
-| #535 judge, gateway, event, loop integration | #534 | §1.1, §1.4–1.7, §6 items 7, 9, 19–21, 25 |
+| #534 provenance gate | this doc, #528 | §1.2, §1.3, §3 |
+| #535 judge, gateway, event, loop integration | #534 | §1.1, §1.1a, §1.4–1.7, §6 items 7, 9, 19–21, 25 |
 | #536 Acts I–II content + death contracts | #532, #533, #529, #531 | §2.6, §2.7, §4.4, §5 |
 | #537 Act III + ending + leaked-thought wiring | #535, #536, #530, #531 | §1.7, §2.2, §2.4, §4.6, §5 |
 | #538 integration proof + instrumentation | #537 | §6 items 26–27, risks R1/R8/R9 |
 
-Five assertions the test suite must carry, because they are the properties this
-structure exists to protect:
+Seven assertions the test suite must carry, because they are the properties this
+structure exists to protect *(1 reworded and 6–7 added by A1)*:
 
-1. **Anti-cheat, zero model.** A hand-built state missing one required anchor, fed
-   a perfectly-worded claim and a `coherent: true` faked judge, yields
-   `outcome: 'bounced'` and does not set the threshold-opened flag.
+1. **Anti-cheat, zero model.** A hand-built state one anchor short of any
+   sufficient set, fed a perfectly-worded claim and a faked judge returning
+   `coherent: true` with the entire catalog cited, yields `outcome: 'bounced'` and
+   does not set the threshold-opened flag. #534's exhaustive form — every one of
+   the 2ⁿ citation subsets against that state — is the version to keep.
 2. **Zero network.** A scripted end-to-end run that reaches the ending through
    `FakeModelGateway` + `FakeJudgeGateway` trips no `fetch` tripwire.
 3. **Replay without a model.** Replaying a recorded run reproduces final state
@@ -1300,3 +1680,11 @@ structure exists to protect:
    does (#529 §5.2, §9.1).
 5. **The ending is never gated on care.** With `care` at its minimum and a
    sufficient anchor set, the restoration ending still opens (#530 Part 3).
+6. **The measure is recorded, and absent ≠ empty** *(A1)*. An absent citation set
+   measures over `gathered` and records `measuredOver: 'gathered'`; an empty one
+   measures over `cited`, returns `unsupported`, and records `measuredOver:
+   'cited'`. A judge outage still reaches the ending for a player who gathered a
+   sufficient set (§1.4's fail-open), and the verdict says so.
+7. **The bounce is not an oracle** *(A1)*. An address citing an anchor the player
+   has never grounded produces a read-back that does not name it (§1.7), and a
+   `target_unresolved` bounce emits no dimension line (§1.6).
