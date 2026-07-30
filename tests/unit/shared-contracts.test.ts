@@ -185,15 +185,38 @@ describe('shared event contracts', () => {
 })
 
 describe('tool and IPC boundary schemas', () => {
-  it('defines exactly the five prototype tool inputs and outputs', () => {
+  it('defines exactly the six bounded tool inputs and outputs', () => {
     expect(Object.keys(toolInputSchemas)).toEqual([
       'observe',
       'move',
       'interact',
       'record_note',
-      'private_reflection'
+      'private_reflection',
+      'address'
     ])
     expect(Object.keys(toolOutputSchemas)).toEqual(Object.keys(toolInputSchemas))
+
+    // The address input carries no identity id: the claimed identity is
+    // asserted in prose, never picked from a menu. Architecture §1.7.
+    expect(
+      toolInputSchemas.address.parse({ threshold: 'staff_door', claim: 'a bedroom' })
+    ).toEqual({ threshold: 'staff_door', claim: 'a bedroom' })
+    expect(
+      toolInputSchemas.address.safeParse({
+        threshold: 'staff_door',
+        claim: 'a bedroom',
+        identityId: 'childs_bedroom'
+      }).success
+    ).toBe(false)
+    expect(
+      toolInputSchemas.address.safeParse({ threshold: 'staff_door', claim: '' }).success
+    ).toBe(false)
+    expect(
+      toolInputSchemas.address.safeParse({
+        threshold: 'staff_door',
+        claim: 'x'.repeat(2_001)
+      }).success
+    ).toBe(false)
 
     expect(toolInputSchemas.observe.parse({ modality: 'visual' })).toEqual({
       modality: 'visual'

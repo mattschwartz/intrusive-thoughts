@@ -77,7 +77,8 @@ const TOOL_SUMMARIES: Record<string, string> = {
   move: 'The agent attempts to move.',
   interact: 'The agent manipulates something nearby.',
   record_note: 'The agent records a note.',
-  private_reflection: 'An internal record is deliberately exposed.'
+  private_reflection: 'An internal record is deliberately exposed.',
+  address: 'The agent addresses a threshold with a claim about what it was.'
 }
 
 function publicMessage(error: unknown): string {

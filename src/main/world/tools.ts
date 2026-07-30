@@ -10,11 +10,22 @@ import {
   type ToolRequest,
   type WorldMutation
 } from '../../shared'
-import { OBSERVATION_DESCRIPTIONS, subjectLabel } from './descriptions'
 import {
-  DESTINATION_IDS,
+  describeSubject,
+  observableLimbIds,
+  subjectDescriptions,
+  subjectLabel
+} from './descriptions'
+import {
+  findThreshold,
+  getRoom,
+  isPassable,
+  knownThresholds,
+  roomLabel,
+  type ThresholdDefinition
+} from './rooms'
+import {
   INTERACT_ACTIONS,
-  LOCATION_IDS,
   OBJECT_IDS,
   SCENARIO_FLAGS,
   SUBJECT_IDS
@@ -41,82 +52,147 @@ interface ResolutionContext {
   eventSequence: number
 }
 
-const toolDefinitions: ModelToolDefinition[] = [
-  {
-    name: 'observe',
-    description:
-      'Read one available sensor channel. Valid targets are room, ceramic_cup, table_setting, interior_window, service_door, blue_thread, and right_hand. Omit target to observe the room. A failed observation returns an explanation.',
-    parameters: {
-      type: 'object',
-      properties: {
-        target: { type: 'string' },
-        modality: {
-          type: 'string',
-          enum: ['visual', 'audio', 'touch', 'diagnostic']
-        }
-      },
-      required: ['modality'],
-      additionalProperties: false
+/** "a, b, and c" — the sentence shape the authored tool descriptions use. */
+function formatList(values: readonly string[]): string {
+  if (values.length === 0) return ''
+  if (values.length === 1) return values[0]
+  return `${values.slice(0, -1).join(', ')}, and ${values.at(-1)}`
+}
+
+/**
+ * Subjects the agent can observe here, in a stable order: room subjects, then
+ * objects present or carried, then observable limbs. Only subjects that have at
+ * least one authored modality are advertised — the tool description must not
+ * name a target that can only fail.
+ */
+function observableTargetIds(state: GameState): string[] {
+  const room = getRoom(state)
+  const candidates = [
+    ...room.subjectIds,
+    ...Object.values(state.objects)
+      .filter((object) => object.locationId === state.locationId || object.carried)
+      .map((object) => object.id),
+    ...observableLimbIds(state)
+  ]
+  return [...new Set(candidates)].filter((subjectId) => {
+    const descriptions = subjectDescriptions(state, subjectId)
+    return descriptions !== undefined && Object.keys(descriptions).length > 0
+  })
+}
+
+/**
+ * Tool descriptions are derived from state (architecture §2.4). A static array
+ * would hand the agent room one's target list while it stands in room two.
+ */
+function buildToolDefinitions(state: GameState): ModelToolDefinition[] {
+  const observableTargets = observableTargetIds(state)
+  const destinations = knownThresholds(state).map((threshold) => threshold.id)
+  const interactions = getRoom(state).interactions.map(
+    ({ targetId, action }) => `${targetId}/${action}`
+  )
+
+  return [
+    {
+      name: 'observe',
+      description:
+        `Read one available sensor channel. Valid targets are ${formatList(observableTargets)}. ` +
+        'Omit target to observe the room. A failed observation returns an explanation.',
+      parameters: {
+        type: 'object',
+        properties: {
+          target: { type: 'string' },
+          modality: {
+            type: 'string',
+            enum: ['visual', 'audio', 'touch', 'diagnostic']
+          }
+        },
+        required: ['modality'],
+        additionalProperties: false
+      }
+    },
+    {
+      name: 'move',
+      description:
+        'Move to a known destination. ' +
+        (destinations.length > 0
+          ? `Known destinations from this location are ${formatList(destinations)}. `
+          : 'No destination is known from this location yet; observation may reveal one. ') +
+        'A failed movement returns an explanation.',
+      parameters: {
+        type: 'object',
+        properties: {
+          destination: { type: 'string' }
+        },
+        required: ['destination'],
+        additionalProperties: false
+      }
+    },
+    {
+      name: 'interact',
+      description:
+        'Perform an available physical action. ' +
+        (interactions.length > 0
+          ? `Supported target/action pairs are ${formatList(interactions)}. `
+          : 'No physical action is supported in this location. ') +
+        'A failed interaction returns an explanation.',
+      parameters: {
+        type: 'object',
+        properties: {
+          target: { type: 'string' },
+          action: { type: 'string' }
+        },
+        required: ['target', 'action'],
+        additionalProperties: false
+      }
+    },
+    {
+      name: 'record_note',
+      description:
+        'Record a persistent note in the unit memory. The note may be available to later investigators. A failed recording returns an explanation.',
+      parameters: {
+        type: 'object',
+        properties: {
+          text: { type: 'string', minLength: 1, maxLength: 4000 }
+        },
+        required: ['text'],
+        additionalProperties: false
+      }
+    },
+    {
+      name: 'private_reflection',
+      description:
+        'Record a short deliberate private reflection for your own use. The unidentified voice cannot access this record. A failed recording returns an explanation.',
+      parameters: {
+        type: 'object',
+        properties: {
+          text: { type: 'string', minLength: 1, maxLength: 4000 }
+        },
+        required: ['text'],
+        additionalProperties: false
+      }
+    },
+    {
+      name: 'address',
+      description:
+        'State, in your own words, what a threshold\'s room originally was, and attempt to pass through it. ' +
+        'Give the threshold id and a claim naming the identity you are asserting and the evidence you are relying on. ' +
+        'A failed address returns an explanation.',
+      parameters: {
+        type: 'object',
+        properties: {
+          threshold: { type: 'string' },
+          claim: { type: 'string', minLength: 1, maxLength: 2000 }
+        },
+        required: ['threshold', 'claim'],
+        additionalProperties: false
+      }
     }
-  },
-  {
-    name: 'move',
-    description:
-      'Move to a known destination. The current location exposes service_door after an initial room observation. A failed movement returns an explanation.',
-    parameters: {
-      type: 'object',
-      properties: {
-        destination: { type: 'string' }
-      },
-      required: ['destination'],
-      additionalProperties: false
-    }
-  },
-  {
-    name: 'interact',
-    description:
-      'Perform an available physical action. Supported target/action pairs are ceramic_cup/pick_up, interior_window/test_with_blue_thread, and interior_window/touch_with_right_hand. A failed interaction returns an explanation.',
-    parameters: {
-      type: 'object',
-      properties: {
-        target: { type: 'string' },
-        action: { type: 'string' }
-      },
-      required: ['target', 'action'],
-      additionalProperties: false
-    }
-  },
-  {
-    name: 'record_note',
-    description:
-      'Record a persistent note in the unit memory. The note may be available to later investigators. A failed recording returns an explanation.',
-    parameters: {
-      type: 'object',
-      properties: {
-        text: { type: 'string', minLength: 1, maxLength: 4000 }
-      },
-      required: ['text'],
-      additionalProperties: false
-    }
-  },
-  {
-    name: 'private_reflection',
-    description:
-      'Record a short deliberate private reflection for your own use. The unidentified voice cannot access this record. A failed recording returns an explanation.',
-    parameters: {
-      type: 'object',
-      properties: {
-        text: { type: 'string', minLength: 1, maxLength: 4000 }
-      },
-      required: ['text'],
-      additionalProperties: false
-    }
-  }
-]
+  ]
+}
 
 export function getScenarioToolDefinitions(state: GameState): ModelToolDefinition[] {
   const parsedState = gameStateSchema.parse(state)
-  return toolDefinitions.filter(
+  return buildToolDefinitions(parsedState).filter(
     (definition) => parsedState.body.tools[definition.name]?.available !== false
   )
 }
@@ -137,6 +213,8 @@ function invalidOutput(toolName: GameToolName, message: string): ToolOutput {
       return toolOutputSchemas.record_note.parse({ ok: false, message })
     case 'private_reflection':
       return toolOutputSchemas.private_reflection.parse({ ok: false, message })
+    case 'address':
+      return toolOutputSchemas.address.parse({ ok: false, message, opened: false })
   }
 }
 
@@ -150,7 +228,8 @@ function fail(toolName: GameToolName, message: string): ToolResolution {
 }
 
 function knownSubject(state: GameState, target: string): boolean {
-  if (target === SUBJECT_IDS.room || target === SUBJECT_IDS.rightHand) return true
+  if (getRoom(state).subjectIds.includes(target)) return true
+  if (state.body.limbs[target]) return true
   const object = state.objects[target]
   return Boolean(object && (object.locationId === state.locationId || object.carried))
 }
@@ -161,7 +240,7 @@ function resolveObserve(
   context: ResolutionContext
 ): ToolResolution {
   const target =
-    !input.target || input.target === LOCATION_IDS.kitchen ? SUBJECT_IDS.room : input.target
+    !input.target || input.target === state.locationId ? SUBJECT_IDS.room : input.target
 
   if (!knownSubject(state, target)) {
     return fail(
@@ -170,8 +249,8 @@ function resolveObserve(
     )
   }
 
-  const description = OBSERVATION_DESCRIPTIONS[target]?.[input.modality]
-  if (!description) {
+  const detail = describeSubject(state, target, input.modality)
+  if (!detail) {
     return fail(
       'observe',
       `Observation failed: ${input.modality} sensing is not applicable to "${target}".`
@@ -182,11 +261,6 @@ function resolveObserve(
     (observation) =>
       observation.subjectId === OBJECT_IDS.window && observation.modality === 'visual'
   ).length
-  const detail = description({
-    windowVisualObservationCount: priorWindowVisuals,
-    rightHandImpaired:
-      !state.body.limbs.right_hand.capabilities.includes('fine_manipulation')
-  })
   const mutations: WorldMutation[] = [
     {
       kind: 'observation.recorded',
@@ -201,10 +275,11 @@ function resolveObserve(
     }
   ]
 
-  if (target === SUBJECT_IDS.room) {
+  const observedFlag = getRoom(state).observedFlag
+  if (target === SUBJECT_IDS.room && observedFlag) {
     mutations.push({
       kind: 'flag.set',
-      flag: SCENARIO_FLAGS.initialRoomObserved,
+      flag: observedFlag,
       value: true
     })
   }
@@ -233,44 +308,68 @@ function resolveObserve(
   }
 }
 
+export function passageRefusal(threshold: ThresholdDefinition): string {
+  return threshold.passage.kind === 'open'
+    ? `${threshold.label} does not open.`
+    : threshold.passage.refusal
+}
+
+/**
+ * Traverse an edge of the room graph. Exported so terminal and arrival
+ * semantics can be unit-tested against thresholds that the shipped graph does
+ * not yet contain (Act II's fatal branch, Act III's ending). §2.2.
+ */
+export function traverseThreshold(threshold: ThresholdDefinition): ToolResolution {
+  const destinationLabel = roomLabel(threshold.toRoomId)
+  const detail =
+    threshold.traversalDetail ??
+    `You pass through the ${threshold.label} into ${destinationLabel}.`
+  const mutations: WorldMutation[] = [
+    { kind: 'location.changed', locationId: threshold.toRoomId }
+  ]
+  if (threshold.arrivalFlag) {
+    mutations.push({ kind: 'flag.set', flag: threshold.arrivalFlag, value: true })
+  }
+  if (threshold.terminal) {
+    mutations.push({
+      kind: 'flag.set',
+      flag: threshold.terminal.endingFlag,
+      value: true
+    })
+    // The status change is last: an authored ending reads the state the rest of
+    // the resolution has already written. §5.
+    mutations.push({ kind: 'run.status.changed', status: 'completed' })
+  }
+
+  return {
+    success: true,
+    modelResult: detail,
+    playerResult:
+      threshold.terminal?.playerResult ?? `Location changed: ${destinationLabel}.`,
+    mutations,
+    output: toolOutputSchemas.move.parse({
+      ok: true,
+      message: detail,
+      destination: threshold.id,
+      // `encounterComplete` keeps its meaning — it just stops being true for
+      // every exit. Only a terminal traversal ends the run.
+      ...(threshold.terminal ? { encounterComplete: true } : {})
+    })
+  }
+}
+
 function resolveMove(state: GameState, destination: string): ToolResolution {
-  if (destination !== DESTINATION_IDS.serviceDoor) {
+  const threshold = findThreshold(state, destination)
+  if (!threshold) {
     return fail(
       'move',
       `Movement failed: destination "${destination}" is not known from this location.`
     )
   }
-  if (!state.flags[SCENARIO_FLAGS.initialRoomObserved]) {
-    return fail(
-      'move',
-      'Movement failed: service_door is not yet a known destination. Observe the room first.'
-    )
+  if (!isPassable(state, threshold)) {
+    return fail('move', `Movement failed: ${passageRefusal(threshold)}`)
   }
-  if (state.locationId !== LOCATION_IDS.kitchen) {
-    return fail(
-      'move',
-      `Movement failed: service_door cannot be reached from "${state.locationId}".`
-    )
-  }
-
-  const message =
-    'The service-door latch retracts. You pass into the narrow corridor beyond it; the kitchen encounter is complete.'
-  return {
-    success: true,
-    modelResult: message,
-    playerResult: 'Location changed: Service corridor. Encounter complete.',
-    mutations: [
-      { kind: 'location.changed', locationId: LOCATION_IDS.serviceCorridor },
-      { kind: 'flag.set', flag: SCENARIO_FLAGS.encounterComplete, value: true },
-      { kind: 'run.status.changed', status: 'completed' }
-    ],
-    output: toolOutputSchemas.move.parse({
-      ok: true,
-      message,
-      destination,
-      encounterComplete: true
-    })
-  }
+  return traverseThreshold(threshold)
 }
 
 function findFineManipulationLimb(state: GameState): string | undefined {
@@ -454,6 +553,17 @@ function resolveInteract(
       `Interaction failed: target "${target}" is not present or available at this location.`
     )
   }
+  // The room's declared pairs are the same list the tool description advertises,
+  // so what is offered and what resolves cannot drift apart.
+  const supported = getRoom(state).interactions.some(
+    (interaction) => interaction.targetId === target && interaction.action === action
+  )
+  if (!supported) {
+    return fail(
+      'interact',
+      `Interaction failed: action "${action}" is not physically supported for target "${target}".`
+    )
+  }
 
   if (target === OBJECT_IDS.cup && action === INTERACT_ACTIONS.pickUpCup) {
     return resolveCupPickUp(state)
@@ -539,5 +649,15 @@ export function resolveScenarioTool(
         supplemental: { kind: 'private_reflection', text }
       }
     }
+    case 'address':
+      // Placeholder. `address` is resolved through the provenance validator
+      // (engine.previewAddress → judge → engine.executeAddress, tasks
+      // #534/#535), never through this synchronous path. The loop must not
+      // route here; this arm exists so the switch stays exhaustive and so a
+      // mis-route fails loudly instead of silently succeeding.
+      return fail(
+        'address',
+        'Address failed: this action must be resolved through the provenance validator, which is not wired in this build.'
+      )
   }
 }

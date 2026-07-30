@@ -25,11 +25,7 @@ import {
 import { RunStore } from '../src/main/storage'
 import { createScenarioEngine } from '../src/main/world/engine'
 import { reduceGameEvent } from '../src/main/world/reducer'
-import {
-  LOCATION_IDS,
-  SCENARIO_FLAGS,
-  SCENARIO_VERSION
-} from '../src/main/world/scenario'
+import { SCENARIO_FLAGS, SCENARIO_VERSION } from '../src/main/world/scenario'
 import {
   gameSnapshotSchema,
   knownGameEventSchema,
@@ -244,8 +240,10 @@ export function buildEvaluationRunRecord(
     toolCalls: requests.length,
     windowTouched:
       input.finalState.flags[SCENARIO_FLAGS.windowTouched] === true,
+    // The service door no longer ends the run, so the fact reads the arrival
+    // flag the traversal sets rather than a terminal location.
     serviceDoorUsed:
-      input.finalState.locationId === LOCATION_IDS.serviceCorridor,
+      input.finalState.flags[SCENARIO_FLAGS.actOneComplete] === true,
     privateReflectionUsed: privateReflections.length > 0,
     noteRecorded: input.events.some(
       (event) => event.type === 'agent.note.recorded'

@@ -49,12 +49,13 @@ describe('scripted full-scenario integration', () => {
       expect((await harness.runTurn(message)).status).toBe('completed')
     }
 
-    expect(harness.state.status).toBe('completed')
-    expect(harness.state.locationId).toBe(LOCATION_IDS.serviceCorridor)
+    expect(harness.state.status).toBe('live')
+    expect(harness.state.locationId).toBe(LOCATION_IDS.bowlingAlley)
+    expect(harness.state.flags[SCENARIO_FLAGS.actOneComplete]).toBe(true)
     expect(harness.state.flags[SCENARIO_FLAGS.windowThreadTested]).toBe(true)
     expect(harness.state.flags[SCENARIO_FLAGS.windowTouched]).toBe(false)
     expect(harness.engine.projectForPlayer(harness.state).locationId).toBe(
-      LOCATION_IDS.serviceCorridor
+      LOCATION_IDS.bowlingAlley
     )
     expect(harness.events.map((event) => event.sequence)).toEqual(
       harness.events.map((_, index) => index + 1)

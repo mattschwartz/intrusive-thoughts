@@ -7,28 +7,22 @@ import {
   type GameState,
   type PlayerSceneView
 } from '../../shared'
-import { LOCATION_LABELS, subjectLabel } from './descriptions'
-import {
-  DESTINATION_IDS,
-  LOCATION_IDS,
-  SCENARIO_FLAGS
-} from './scenario'
+import { subjectLabel } from './descriptions'
+import { knownThresholds, roomLabel } from './rooms'
 
 export function projectWorldForAgent(state: GameState): AgentWorldView {
   return agentWorldViewSchema.parse({
     locationId: state.locationId,
-    locationLabel: LOCATION_LABELS[state.locationId] ?? state.locationId,
+    locationLabel: roomLabel(state.locationId),
     observations: state.observations
       .filter((observation) => observation.visibility.includes('agent'))
       .map(({ visibility: _visibility, acquiredAtSequence: _sequence, ...observation }) => ({
         ...observation,
         sourceEventId: observation.id
       })),
-    knownDestinations:
-      state.locationId === LOCATION_IDS.kitchen &&
-      state.flags[SCENARIO_FLAGS.initialRoomObserved]
-        ? [DESTINATION_IDS.serviceDoor]
-        : [],
+    // Derived from the current room's edges. A revealed but gated threshold is
+    // still listed: "known" means the agent knows the exit exists. §2.3.
+    knownDestinations: knownThresholds(state).map((threshold) => threshold.id),
     notes: state.notes
       .filter((note) => note.visibility.includes('agent'))
       .map(({ visibility: _visibility, createdAtSequence: _sequence, ...note }) => note)
@@ -66,7 +60,7 @@ export function projectSceneForPlayer(state: GameState): PlayerSceneView {
 
   return playerSceneViewSchema.parse({
     locationId: state.locationId,
-    locationLabel: LOCATION_LABELS[state.locationId] ?? state.locationId,
+    locationLabel: roomLabel(state.locationId),
     details: state.observations
       .filter((observation) => observation.visibility.includes('player'))
       .map((observation) => ({

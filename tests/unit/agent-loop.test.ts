@@ -745,8 +745,8 @@ describe('AgentLoop', () => {
     })
 
     expect(result.status).toBe('completed')
-    expect(result.state.locationId).toBe(LOCATION_IDS.serviceCorridor)
-    expect(result.state.status).toBe('completed')
+    expect(result.state.locationId).toBe(LOCATION_IDS.bowlingAlley)
+    expect(result.state.status).toBe('live')
     expect(harness.gateway.requests).toHaveLength(5)
   })
 

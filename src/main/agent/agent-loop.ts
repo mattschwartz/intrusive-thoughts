@@ -102,6 +102,8 @@ function parseToolArguments(
         return toolInputSchemas.record_note.safeParse(value)
       case 'private_reflection':
         return toolInputSchemas.private_reflection.safeParse(value)
+      case 'address':
+        return toolInputSchemas.address.safeParse(value)
     }
   })()
   return result.success

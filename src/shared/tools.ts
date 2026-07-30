@@ -5,6 +5,7 @@ import {
   observationIdSchema,
   requestIdSchema,
   responseIdSchema,
+  serializableIdSchema,
   toolCallIdSchema,
   turnIdSchema
 } from './ids'
@@ -15,7 +16,8 @@ export const gameToolNameSchema = z.enum([
   'move',
   'interact',
   'record_note',
-  'private_reflection'
+  'private_reflection',
+  'address'
 ])
 export type GameToolName = z.infer<typeof gameToolNameSchema>
 
@@ -55,6 +57,22 @@ export const privateReflectionInputSchema = z
   })
   .strict()
 export type PrivateReflectionInput = z.infer<typeof privateReflectionInputSchema>
+
+/**
+ * `threshold` is a threshold id from the room graph. It is typed here as a
+ * generic serializable id; the provenance module (task #535) re-exports the
+ * same underlying schema as `thresholdIdSchema`.
+ *
+ * The input deliberately carries no identity id: the claimed identity is
+ * asserted in prose. See architecture §1.7.
+ */
+export const addressInputSchema = z
+  .object({
+    threshold: serializableIdSchema,
+    claim: z.string().min(1).max(2_000)
+  })
+  .strict()
+export type AddressInput = z.infer<typeof addressInputSchema>
 
 const baseToolOutputSchema = z
   .object({
@@ -99,12 +117,22 @@ export const privateReflectionOutputSchema = baseToolOutputSchema
   .strict()
 export type PrivateReflectionOutput = z.infer<typeof privateReflectionOutputSchema>
 
+/** The output never returns anchor ids: the message is authored prose. §1.7. */
+export const addressOutputSchema = baseToolOutputSchema
+  .extend({
+    opened: z.boolean(),
+    threshold: serializableIdSchema.optional()
+  })
+  .strict()
+export type AddressOutput = z.infer<typeof addressOutputSchema>
+
 export const toolInputSchemas = {
   observe: observeInputSchema,
   move: moveInputSchema,
   interact: interactInputSchema,
   record_note: recordNoteInputSchema,
-  private_reflection: privateReflectionInputSchema
+  private_reflection: privateReflectionInputSchema,
+  address: addressInputSchema
 } as const
 
 export const toolOutputSchemas = {
@@ -112,7 +140,8 @@ export const toolOutputSchemas = {
   move: moveOutputSchema,
   interact: interactOutputSchema,
   record_note: recordNoteOutputSchema,
-  private_reflection: privateReflectionOutputSchema
+  private_reflection: privateReflectionOutputSchema,
+  address: addressOutputSchema
 } as const
 
 export type GameToolInputMap = {
@@ -121,6 +150,7 @@ export type GameToolInputMap = {
   interact: InteractInput
   record_note: RecordNoteInput
   private_reflection: PrivateReflectionInput
+  address: AddressInput
 }
 
 export type GameToolOutputMap = {
@@ -129,6 +159,7 @@ export type GameToolOutputMap = {
   interact: InteractOutput
   record_note: RecordNoteOutput
   private_reflection: PrivateReflectionOutput
+  address: AddressOutput
 }
 
 export const jsonSchemaObjectSchema = z

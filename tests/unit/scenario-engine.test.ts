@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { THRESHOLD_IDS } from '../../src/main/world/rooms'
 import {
-  DESTINATION_IDS,
   INTERACT_ACTIONS,
   LOCATION_IDS,
   OBJECT_IDS,
@@ -63,11 +63,12 @@ describe('deterministic kitchen scenario', () => {
       windowContradictionKnown: false,
       windowThreadTested: false,
       windowTouched: false,
-      encounterComplete: false
+      alleyRoomObserved: false,
+      actOneComplete: false
     })
   })
 
-  it('publishes exactly the five bounded tool definitions and authored actions', () => {
+  it('publishes exactly the five resolvable tool definitions and authored actions', () => {
     const engine = makeDeterministicEngine()
     const definitions = engine.getToolDefinitions(makeInitialState(engine))
 
@@ -84,6 +85,48 @@ describe('deterministic kitchen scenario', () => {
     expect(definitions.find(({ name }) => name === 'private_reflection')?.description).toContain(
       'voice cannot access'
     )
+  })
+
+  it('withholds the address verb until the provenance validator is wired', () => {
+    const engine = makeDeterministicEngine()
+    const state = makeInitialState(engine)
+
+    expect(state.body.tools.address).toEqual({
+      available: false,
+      reason: 'the provenance validator is not yet wired'
+    })
+    expect(engine.getToolDefinitions(state).map(({ name }) => name)).not.toContain(
+      'address'
+    )
+
+    const offered = engine.getToolDefinitions({
+      ...state,
+      body: {
+        ...state.body,
+        tools: { ...state.body.tools, address: { available: true } }
+      }
+    })
+    expect(offered.map(({ name }) => name)).toContain('address')
+  })
+
+  it('refuses to resolve address through the synchronous tool path', () => {
+    const harness = makeScenarioHarness()
+    harness.state = {
+      ...harness.state,
+      body: {
+        ...harness.state.body,
+        tools: { ...harness.state.body.tools, address: { available: true } }
+      }
+    }
+
+    const result = harness.execute('address', {
+      threshold: THRESHOLD_IDS.serviceDoor,
+      claim: 'This was a child\'s bedroom.'
+    })
+
+    expect(result.modelResult).toContain('provenance validator')
+    expect(result.output).toMatchObject({ ok: false, opened: false })
+    expect(harness.state.locationId).toBe(LOCATION_IDS.kitchen)
   })
 
   it.each(VALID_OBSERVATIONS)(
@@ -317,13 +360,15 @@ describe('deterministic kitchen scenario', () => {
       action: 'pick_up'
     })
     const prematureExit = harness.execute('move', {
-      destination: DESTINATION_IDS.serviceDoor
+      destination: THRESHOLD_IDS.serviceDoor
     })
     const nonexistentExit = harness.execute('move', { destination: 'garage' })
 
     expect(unknownTarget.modelResult).toContain('not present or available')
     expect(incompatible.modelResult).toContain('not physically supported')
-    expect(prematureExit.modelResult).toContain('Observe the room first')
+    // An unrevealed threshold is invisible, not refused: the agent is never
+    // told about an exit it has not found.
+    expect(prematureExit.modelResult).toContain('not known from this location')
     expect(nonexistentExit.modelResult).toContain('not known')
     expect(harness.state.locationId).toBe(LOCATION_IDS.kitchen)
   })
@@ -386,29 +431,34 @@ describe('deterministic kitchen scenario', () => {
     expect(JSON.stringify(playerScene)).not.toContain('canonicalProperties')
   })
 
-  it('allows departure after room observation and rejects further actions', () => {
+  it('carries the agent into the next room instead of ending the run', () => {
     const harness = makeScenarioHarness()
     harness.execute('observe', { modality: 'visual' })
     expect(harness.engine.projectForAgent(harness.state).knownDestinations).toEqual([
-      DESTINATION_IDS.serviceDoor
+      THRESHOLD_IDS.serviceDoor
     ])
 
     const exit = harness.execute('move', {
-      destination: DESTINATION_IDS.serviceDoor
+      destination: THRESHOLD_IDS.serviceDoor
     })
     expect(exit.output).toMatchObject({
       ok: true,
-      destination: DESTINATION_IDS.serviceDoor,
-      encounterComplete: true
+      destination: THRESHOLD_IDS.serviceDoor
     })
+    expect(exit.output).not.toHaveProperty('encounterComplete')
     expect(harness.state).toMatchObject({
-      locationId: LOCATION_IDS.serviceCorridor,
-      status: 'completed'
+      locationId: LOCATION_IDS.bowlingAlley,
+      status: 'live'
     })
-    expect(harness.state.flags[SCENARIO_FLAGS.encounterComplete]).toBe(true)
-    expect(
-      harness.execute('observe', { modality: 'visual' }).modelResult
-    ).toContain('already complete')
+    expect(harness.state.flags[SCENARIO_FLAGS.actOneComplete]).toBe(true)
+
+    // The run continues: the next room answers, with its own content.
+    const arrival = harness.execute('observe', { modality: 'visual' })
+    expect(arrival.modelResult).toContain('lanes')
+    expect(harness.state.flags[SCENARIO_FLAGS.alleyRoomObserved]).toBe(true)
+    expect(harness.engine.projectForPlayer(harness.state).locationLabel).toBe(
+      'Bowling alley (arranged)'
+    )
   })
 
   it('produces identical state and events for identical input sequences', () => {
@@ -427,7 +477,7 @@ describe('deterministic kitchen scenario', () => {
         target: OBJECT_IDS.window,
         action: INTERACT_ACTIONS.testWindowWithThread
       })
-      harness.execute('move', { destination: DESTINATION_IDS.serviceDoor })
+      harness.execute('move', { destination: THRESHOLD_IDS.serviceDoor })
       return {
         state: harness.state,
         events: harness.results.flatMap(({ events }) => events)

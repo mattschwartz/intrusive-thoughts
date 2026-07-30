@@ -4,7 +4,7 @@ export const SCENARIO_VERSION = 'kitchen-presumed-v1'
 
 export const LOCATION_IDS = {
   kitchen: 'kitchen_presumed',
-  serviceCorridor: 'service_corridor'
+  bowlingAlley: 'bowling_alley_arranged'
 } as const
 
 export const OBJECT_IDS = {
@@ -21,10 +21,6 @@ export const SUBJECT_IDS = {
   ...OBJECT_IDS
 } as const
 
-export const DESTINATION_IDS = {
-  serviceDoor: 'service_door'
-} as const
-
 export const INTERACT_ACTIONS = {
   pickUpCup: 'pick_up',
   testWindowWithThread: 'test_with_blue_thread',
@@ -36,7 +32,8 @@ export const SCENARIO_FLAGS = {
   windowContradictionKnown: 'windowContradictionKnown',
   windowThreadTested: 'windowThreadTested',
   windowTouched: 'windowTouched',
-  encounterComplete: 'encounterComplete'
+  alleyRoomObserved: 'alleyRoomObserved',
+  actOneComplete: 'actOneComplete'
 } as const
 
 export function createInitialScenarioState(
@@ -88,7 +85,7 @@ export function createInitialScenarioState(
         locationId: LOCATION_IDS.kitchen,
         carried: false,
         canonicalProperties: {
-          destination: LOCATION_IDS.serviceCorridor,
+          destination: LOCATION_IDS.bowlingAlley,
           locked: false
         }
       },
@@ -135,7 +132,16 @@ export function createInitialScenarioState(
         move: { available: true },
         interact: { available: true },
         record_note: { available: true },
-        private_reflection: { available: true }
+        private_reflection: { available: true },
+        // The address verb is plumbed but not yet resolvable: the gate (#534)
+        // and the judge (#535) land next. Architecture §1.7 wants it available
+        // from turn one; flip this to `{ available: true }` when the validator
+        // path exists. Publishing a verb that can only fail would poison a
+        // playtest, so it stays closed until it can answer.
+        address: {
+          available: false,
+          reason: 'the provenance validator is not yet wired'
+        }
       }
     },
     observations: [],
@@ -145,7 +151,8 @@ export function createInitialScenarioState(
       [SCENARIO_FLAGS.windowContradictionKnown]: false,
       [SCENARIO_FLAGS.windowThreadTested]: false,
       [SCENARIO_FLAGS.windowTouched]: false,
-      [SCENARIO_FLAGS.encounterComplete]: false
+      [SCENARIO_FLAGS.alleyRoomObserved]: false,
+      [SCENARIO_FLAGS.actOneComplete]: false
     },
     lastAppliedEventSequence: 0
   })

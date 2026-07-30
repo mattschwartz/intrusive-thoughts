@@ -7,8 +7,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RunStore } from '../../src/main/storage/run-store'
 import { createScenarioEngine } from '../../src/main/world/engine'
 import { reduceGameEvent } from '../../src/main/world/reducer'
+import { THRESHOLD_IDS } from '../../src/main/world/rooms'
 import {
-  DESTINATION_IDS,
   INTERACT_ACTIONS,
   OBJECT_IDS,
   SCENARIO_VERSION
@@ -122,7 +122,7 @@ async function persistPath(
         {
           callId: 'call-3',
           name: 'move' as const,
-          arguments: { destination: DESTINATION_IDS.serviceDoor }
+          arguments: { destination: THRESHOLD_IDS.serviceDoor }
         }
       ]
 
@@ -152,7 +152,7 @@ describe('run replay', () => {
       expect(first.finalState).toEqual(expectedState)
       expect(second.finalState).toEqual(expectedState)
       expect(first.events).toEqual(events)
-      expect(first.metadata.status).toBe(risky ? 'live' : 'completed')
+      expect(first.metadata.status).toBe('live')
       expect(first.rendererEvents.every((event) => event.visibility.includes('player'))).toBe(
         true
       )
