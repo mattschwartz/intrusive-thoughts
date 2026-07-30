@@ -313,7 +313,7 @@ The tool is `address(threshold: 'bedroom_door', claim: <prose>)`, always availab
 [read-back]  +  [verdict line]
 ```
 
-**Read-back** — from `verdict.citedAnchorIds`, using the labels below. Non-optional (#528 §4.5): a player who said "the banner" and hears the agent list something else knows instantly what happened, instead of concluding the game is not listening.
+**Read-back** — from `verdict.effectiveAnchorIds`, the anchors the player both cited **and** actually grounded; **never** from `citedAnchorIds` (#527 A1, §1.7). An anchor the player named but never grounded must not appear here: *"I presented the banner"* while the agent is holding no banner is false in fiction, and it is an oracle, because it confirms to a player who never found the banner that a thing by that name exists in this world (#528 §4.4). Non-optional (#528 §4.5), using the labels below: a player who said "the banner" and hears the agent list something else knows instantly what happened, instead of concluding the game is not listening.
 
 | Anchor | Label in the agent's mouth |
 |---|---|
@@ -326,10 +326,16 @@ The tool is `address(threshold: 'bedroom_door', claim: <prose>)`, always availab
 | `party_scorecard` | the scorecard |
 | `party_photos` | the photographs |
 
-- **≥1 resolved:** *"I presented {labels, comma-joined, final `and`}."*
-- **0 resolved:** *"I put it in the words you gave me. It didn't take hold of anything. Whatever you're pointing at, I don't think I have it — I've been back through everything I've recorded and I'm not finding it. If you saw it, I didn't."*
+- **≥1 held:** *"I presented {labels, comma-joined, final `and`}."*
+- **0 held:** *"I put it in the words you gave me. It didn't take hold of anything. Whatever you're pointing at, I don't think I have any of it — I've been back through everything I've recorded and I'm not finding it. If you saw it, I didn't."*
 
 The zero case covers **F2 (invented anchors)** without the engine needing to quote the invented noun back: the denial routes entirely through the agent's own limits (#528 §4.3), which is true in-fiction and reveals nothing about the world.
+
+**What the read-back reports, now that it reads `effective`.** It is a statement of *what the agent is holding*, not of *what it heard*. A player who says "the banner" and does not hear it back can therefore no longer distinguish a citation-extraction miss from an anchor they never actually grounded. That ambiguity is acceptable and it is why the correction costs #528 §4.5 nothing: **both failures take the same remedy.** Go and look at the thing. If the agent misheard, observing it and citing it again fixes it; if it was never grounded, observing it fixes it. The read-back's job was never diagnosis — it was to stop a missed paraphrase reading as the game not listening — and a list of what the agent demonstrably has in hand does that job unchanged.
+
+**The zero case, re-read against its new arrival path (#527 A1).** Under cited-only it fired when the judge resolved nothing at all — F2, invented anchors. Under `cited ∩ gathered` it also fires on a *confident, well-formed, entirely ungrounded* address: four real anchors named fluently by a player who has grounded none of them (F1). Read line by line the copy holds, and it holds better here than in the case it was written for. *"I've been back through everything I've recorded and I'm not finding it. If you saw it, I didn't"* is a polite fiction against an invented music box; against a real banner the player guessed at, it is an instruction — *go and show it to me* — which is exactly the action the situation calls for. One word widened: *"I don't think I have it"* → *"I don't think I have any of it"*, so the sentence carries a four-noun address without sounding like the agent parsed one vague gesture. That misread is the whole risk in this case, because a player who believes they were misheard retries with better wording instead of walking back to the alley.
+
+**No second variant for the ungrounded case. This is a prohibition, not a preference.** The zero read-back must be *byte-identical* whether it fired because nothing matched the catalog (F2) or because everything matched and none of it was held (F1). Branching on `citedAnchorIds.length > 0 && effectiveAnchorIds.length === 0` rebuilds the precise oracle A1 removed, in its purest form: type *"the music box"* and get one line, type *"the banner"* and get another, and the difference in tone has just confirmed that a banner exists in this house. **The zero-resolved read-back may not read `citedAnchorIds` at all** — not for a count, not for a length test, not for a branch. Binding on #534 and #535; worth a test that pins the two cases to the same string.
 
 **Verdict lines** — final copy.
 
@@ -807,8 +813,8 @@ I would rather know the price than guess it. If the price is real, tell me and I
 |---|---|
 | **#527 architect** | §6.1 — the Act III ending is a terminal `interact`, not a terminal traversal. `ThresholdDefinition.terminal` goes unused. One extra room in the graph. |
 | **#530 relationship** | §6.2 — two reachability fixes: `pushed_past_tell` at ≥1 cycle; a pit relief valve on `warn_off`. Both determine whether authored endings exist. |
-| **#534 gate** | §2.4 bounce copy is final; the verdict must carry the missing dimensions and `citedAnchorIds` for the read-back. |
-| **#535 judge** | Nothing new. #528 §9 is the rubric; §2.4's zero-resolved read-back is what an unresolved reference must produce. |
+| **#534 gate** | §2.4 bounce copy is final; the verdict must carry the missing dimensions and `effectiveAnchorIds` for the read-back (#527 A1). The zero read-back must not branch on `citedAnchorIds`. |
+| **#535 judge** | Nothing new. #528 §9 is the rubric; §2.4's zero-resolved read-back is what an *ungrounded* reference must produce — invented or merely never-gathered, the same string either way. |
 | **#536 encode I–II** | §1.2 descriptions, §1.4 interact table, §6.3 name substitution. |
 | **#537 encode III** | Everything in Parts Two, Three, Four. §4.1 assembly order is binding. §4.7's non-gating property is a test, not a comment. |
 | **#538 instrumentation** | `endedInRestoration` + the four `*Restored` flags + the care band at ending time + which body and clause were selected, recorded per run. |

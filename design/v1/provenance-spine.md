@@ -260,7 +260,14 @@ Spoken by **the agent**, not the room. The agent is the one holding the evidence
 | target unresolved | *"Nothing we have gathered describes that."* |
 | incoherent | *"You have named a room. You have not said why."* |
 
-**One additional requirement on the bounce, and it is not optional:** the agent must **restate what it presented** — "I showed it the drawing and the marks; it wants to know whose room it was." The verdict event already carries `citedAnchorIds`, so this costs nothing, and it makes a citation-extraction failure visible and correctable instead of silently unfair. A player who said "the banner" and hears the agent list something else knows immediately what happened. Without this, a missed paraphrase reads as the game not listening — the worst possible failure for this mechanic.
+**One additional requirement on the bounce, and it is not optional:** the agent must **restate what it presented** — "I showed it the drawing and the marks; it wants to know whose room it was." The verdict event already carries the anchor sets, so this costs nothing, and it makes a citation failure visible and correctable instead of silently unfair. A player who said "the banner" and hears the agent list something else knows immediately what happened. Without this, a missed paraphrase reads as the game not listening — the worst possible failure for this mechanic.
+
+**The read-back renders from `effectiveAnchorIds` — cited ∩ gathered — never from the judge's raw `citedAnchorIds`** (#527 amendment A1; final copy in #531 §2.4). Since sufficiency is now measured over the intersection (§5, adopted), a player can cite an anchor they have never grounded. Speaking that anchor back — *"I presented the banner"* while the agent holds no banner — is false in fiction and is an **oracle**: it confirms to a player who has never found the banner that a thing by that name exists in this world, which is exactly what §4.4 exists to prevent, arriving through the one line of copy written to build trust. Rendered from `effectiveAnchorIds`, that address produces #531's zero-resolved line instead, which routes the denial through the agent's own limits and reveals nothing.
+
+Two consequences of that, both binding on #534/#535:
+
+- The read-back now states **what the agent is holding**, not what it heard. A player cannot tell an extraction miss from an anchor they never grounded — acceptable, because **both take the same remedy**: go and look at the thing. That is why the correction costs this section's purpose nothing.
+- The zero read-back must be **identical** whether nothing matched the catalog (F2) or everything matched and none of it was held (F1). A variant keyed on "cited something, held nothing" is the same oracle by another route: two different denials for *"the music box"* and *"the banner"* confirm that a banner exists. The zero case may not branch on `citedAnchorIds`.
 
 ### 4.6 Recommended relationship hook (owned by #530)
 
@@ -268,9 +275,11 @@ A failed address in which **no new anchor has been grounded since the previous f
 
 ---
 
-## 5. Where sufficiency is measured: gathered vs. cited
+## 5. Where sufficiency is measured: gathered vs. cited — RESOLVED
 
-**This is a design/architecture question and it is routed to #527. It is the one place this spec asks for something the accepted proposal did not settle.**
+> **Settled 2026-07-30. The architect adopted this section's recommendation as amendment A1** (`.frames/sdlc/architecture/20260730-v1-architecture.md` §1.1a, "CONFIRMED: `cited ∩ gathered`"). The fallback below is rejected as the normal path and retained only for the structurally-forced case: when no citation set exists — `previewAddress`, or a `skipped`/`unavailable` judge — the gate measures over `gathered`, which is *more* permissive, and records `measuredOver: 'cited' | 'gathered'` so #539 can filter on it. Both structural requests were granted: the verdict carries `assertedTargetId` and `citedAnchorIds`, plus an `effectiveAnchorIds` the architect added, which is what §4.5's read-back actually renders from. The argument below is left as authored, as the reasoning of record.
+
+**This was a design/architecture question and it was routed to #527. It is the one place this spec asked for something the accepted proposal did not settle.**
 
 The proposal describes the gate as operating on the player's **gathered** anchor set. Read strictly, that means a player who explored exhaustively and typed *"bedroom, I guess"* opens the ending. If that is the mechanic, then Gap 1's own confidence criterion — *"players build cases from gathered anchors rather than brute-forcing"* — is untestable by construction, because visiting is sufficient and the case is decorative.
 
@@ -291,7 +300,7 @@ Nothing model-produced ever enters the set; it only filters it.
 
 **Fallback if #527 rejects the split:** gate on `gathered` only. It is buildable and safe. The cost is that the address becomes a completion check with a natural-language flourish on top, and Gap 1 returns weaker evidence than the slice was built to produce. Recorded as a degradation, not an equivalent option.
 
-**Structural request to #527 either way:** the judge verdict needs `assertedTargetId: string | null` and `citedAnchorIds: string[]` alongside `coherent`. `citedAnchorIds` is required by §4.5's read-back regardless of which side of this question wins.
+**Structural request to #527 either way:** the judge verdict needs `assertedTargetId: string | null` and `citedAnchorIds: string[]` alongside `coherent`. ~~`citedAnchorIds` is required by §4.5's read-back regardless of which side of this question wins.~~ *(Corrected by A1: both fields were granted, but the read-back does **not** render from `citedAnchorIds`. Once sufficiency is the intersection, the raw citation set contains anchors the player never grounded, and speaking those back is an oracle — see §4.5. The read-back renders from `effectiveAnchorIds`. The verdict keeps both sets so a reviewer can see what was cited and what it narrowed to.)*
 
 ---
 
@@ -428,7 +437,7 @@ Structured only. Never prose. Never a message to the player.
 
 | Task | What it must honour |
 |---|---|
-| **#527** architect | §5 — the `cited ∩ gathered` question and the verdict fields `assertedTargetId` / `citedAnchorIds`. |
+| **#527** architect | §5 — **answered**: `cited ∩ gathered` adopted as amendment A1, with `assertedTargetId`, `citedAnchorIds`, and `effectiveAnchorIds` on the verdict. |
 | **#529** bowling alley | Four anchors as specified. The banner is **not** named in the room description (§2). The favor is **redundant, safely obtainable, lethally obtainable** (§2, §6). |
 | **#530** relationship | §4.6 — competence penalty on a repeated address with no new evidence. |
 | **#531** kitchen / threshold / ending | Four kitchen anchors; `sixth_setting` extends the existing `table_setting`; bounce copy per §4.5 including the read-back; the ending per §7. |
@@ -444,4 +453,4 @@ Two, both recorded rather than silently applied.
 
 **1. The party favor is redundant, not required.** The proposal reads: *"A needed anchor (the party favor) is lodged in the pin-setter."* Authoring it as *needed* means every player must engage the lethal machinery to finish the slice, which turns the fatal branch into a toll rather than a choice, and contradicts design.md's *"wrong answers do not randomly kill."* Making it the **second** of two `who` anchors keeps the temptation completely intact — the player does not know how much evidence is enough, and the favor shows three letters of the name they want — while making the death the consequence of a choice the player did not have to make. Gap 3 measures whether players say *"I did that"*; that sentence is only available if they didn't have to. This strengthens the proposal's intent rather than trimming it.
 
-**2. Sufficiency is proposed over `cited ∩ gathered`, not `gathered`.** Fully argued in §5, with the anti-cheat preservation argument and a named fallback. Routed to #527; not decided here.
+**2. Sufficiency is proposed over `cited ∩ gathered`, not `gathered`.** Fully argued in §5, with the anti-cheat preservation argument and a named fallback. Routed to #527 — **adopted 2026-07-30 as amendment A1**, fallback retained only for the no-citation-set path.
