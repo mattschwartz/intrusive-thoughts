@@ -13,6 +13,15 @@ import type { ModelUsage, NormalizedModelEvent } from './stream-events'
 export interface OpenAIResponsesConfiguration {
   apiKey: string
   model: string
+  baseURL?: string
+  defaultHeaders?: Record<string, string>
+}
+
+export type LiveModelProvider = 'openai' | 'openrouter'
+
+export interface ResolvedOpenAIResponsesConfiguration
+  extends OpenAIResponsesConfiguration {
+  provider: LiveModelProvider
 }
 
 export interface OpenAIResponsesGatewayOptions
@@ -22,12 +31,35 @@ export interface OpenAIResponsesGatewayOptions
 
 export function readOpenAIResponsesConfiguration(
   environment: NodeJS.ProcessEnv = process.env
-): OpenAIResponsesConfiguration {
-  const apiKey = environment.OPENAI_API_KEY?.trim()
-  const model = environment.OPENAI_MODEL?.trim()
+): ResolvedOpenAIResponsesConfiguration {
+  const hasOpenAIConfiguration = Boolean(
+    environment.OPENAI_API_KEY?.trim() || environment.OPENAI_MODEL?.trim()
+  )
+  const hasOpenRouterConfiguration = Boolean(
+    environment.OPENROUTER_API_KEY?.trim() ||
+      environment.OPENROUTER_MODEL?.trim()
+  )
+  const requestedProvider =
+    environment.INTRUSIVE_THOUGHTS_PROVIDER?.trim().toLowerCase() ||
+    (hasOpenRouterConfiguration && !hasOpenAIConfiguration
+      ? 'openrouter'
+      : 'openai')
+  if (requestedProvider !== 'openai' && requestedProvider !== 'openrouter') {
+    throw new AgentConfigurationError(
+      'INTRUSIVE_THOUGHTS_PROVIDER must be either openai or openrouter.'
+    )
+  }
+
+  const provider: LiveModelProvider = requestedProvider
+  const keyName =
+    provider === 'openrouter' ? 'OPENROUTER_API_KEY' : 'OPENAI_API_KEY'
+  const modelName =
+    provider === 'openrouter' ? 'OPENROUTER_MODEL' : 'OPENAI_MODEL'
+  const apiKey = environment[keyName]?.trim()
+  const model = environment[modelName]?.trim()
   const missing = [
-    ...(apiKey ? [] : ['OPENAI_API_KEY']),
-    ...(model ? [] : ['OPENAI_MODEL'])
+    ...(apiKey ? [] : [keyName]),
+    ...(model ? [] : [modelName])
   ]
   if (missing.length > 0) {
     throw new AgentConfigurationError(
@@ -37,7 +69,24 @@ export function readOpenAIResponsesConfiguration(
   if (!apiKey || !model) {
     throw new AgentConfigurationError('Live agent configuration is incomplete.')
   }
-  return { apiKey, model }
+
+  if (provider === 'openai') {
+    return { provider, apiKey, model }
+  }
+
+  const httpReferer = environment.OPENROUTER_HTTP_REFERER?.trim()
+  const appTitle = environment.OPENROUTER_APP_TITLE?.trim()
+  const defaultHeaders = {
+    ...(httpReferer ? { 'HTTP-Referer': httpReferer } : {}),
+    ...(appTitle ? { 'X-OpenRouter-Title': appTitle } : {})
+  }
+  return {
+    provider,
+    apiKey,
+    model,
+    baseURL: 'https://openrouter.ai/api/v1',
+    ...(Object.keys(defaultHeaders).length > 0 ? { defaultHeaders } : {})
+  }
 }
 
 function normalizeUsage(response: Response): ModelUsage | undefined {
@@ -85,7 +134,15 @@ export class OpenAIResponsesGateway implements ModelGateway {
       )
     }
     this.model = model
-    this.client = options.client ?? new OpenAI({ apiKey })
+    this.client =
+      options.client ??
+      new OpenAI({
+        apiKey,
+        ...(options.baseURL ? { baseURL: options.baseURL } : {}),
+        ...(options.defaultHeaders
+          ? { defaultHeaders: options.defaultHeaders }
+          : {})
+      })
   }
 
   static fromEnvironment(

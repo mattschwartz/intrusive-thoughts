@@ -755,4 +755,70 @@ describe('AgentLoop', () => {
       'OPENAI_API_KEY and OPENAI_MODEL'
     )
   })
+
+  it('reads the legacy OpenAI configuration path by default', () => {
+    expect(
+      readOpenAIResponsesConfiguration({
+        OPENAI_API_KEY: '  openai-secret  ',
+        OPENAI_MODEL: '  gpt-example  '
+      })
+    ).toEqual({
+      provider: 'openai',
+      apiKey: 'openai-secret',
+      model: 'gpt-example'
+    })
+  })
+
+  it('configures the OpenAI SDK for OpenRouter Responses requests', () => {
+    expect(
+      readOpenAIResponsesConfiguration({
+        INTRUSIVE_THOUGHTS_PROVIDER: 'openrouter',
+        OPENROUTER_API_KEY: '  openrouter-secret  ',
+        OPENROUTER_MODEL: '  provider/model  ',
+        OPENROUTER_HTTP_REFERER: '  https://example.com/game  ',
+        OPENROUTER_APP_TITLE: '  Intrusive Thoughts  '
+      })
+    ).toEqual({
+      provider: 'openrouter',
+      apiKey: 'openrouter-secret',
+      model: 'provider/model',
+      baseURL: 'https://openrouter.ai/api/v1',
+      defaultHeaders: {
+        'HTTP-Referer': 'https://example.com/game',
+        'X-OpenRouter-Title': 'Intrusive Thoughts'
+      }
+    })
+  })
+
+  it('infers OpenRouter when only OpenRouter configuration is present', () => {
+    expect(
+      readOpenAIResponsesConfiguration({
+        OPENROUTER_API_KEY: 'openrouter-secret',
+        OPENROUTER_MODEL: 'provider/model'
+      })
+    ).toMatchObject({
+      provider: 'openrouter',
+      apiKey: 'openrouter-secret',
+      model: 'provider/model',
+      baseURL: 'https://openrouter.ai/api/v1'
+    })
+  })
+
+  it('reports the provider-specific OpenRouter variables when missing', () => {
+    expect(() =>
+      readOpenAIResponsesConfiguration({
+        INTRUSIVE_THOUGHTS_PROVIDER: 'openrouter'
+      })
+    ).toThrow('OPENROUTER_API_KEY and OPENROUTER_MODEL')
+  })
+
+  it('rejects unknown live model providers', () => {
+    expect(() =>
+      readOpenAIResponsesConfiguration({
+        INTRUSIVE_THOUGHTS_PROVIDER: 'unknown'
+      })
+    ).toThrow(
+      'INTRUSIVE_THOUGHTS_PROVIDER must be either openai or openrouter'
+    )
+  })
 })

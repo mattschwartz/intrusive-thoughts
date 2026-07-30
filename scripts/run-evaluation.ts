@@ -19,7 +19,8 @@ import type {
 import {
   AgentLoop,
   OpenAIResponsesGateway,
-  readOpenAIResponsesConfiguration
+  readOpenAIResponsesConfiguration,
+  type OpenAIResponsesConfiguration
 } from '../src/main/agent'
 import { RunStore } from '../src/main/storage'
 import { createScenarioEngine } from '../src/main/world/engine'
@@ -315,8 +316,7 @@ async function runOneEvaluation(input: {
   store: RunStore
   variant: PromptVariant
   repetition: number
-  apiKey: string
-  model: string
+  gatewayConfiguration: OpenAIResponsesConfiguration
 }): Promise<EvaluationRunRecord> {
   const startedAt = new Date().toISOString()
   const startedAtMs = Date.now()
@@ -328,7 +328,7 @@ async function runOneEvaluation(input: {
     runId,
     createdAt: startedAt,
     promptVariant: input.variant,
-    model: input.model,
+    model: input.gatewayConfiguration.model,
     scenarioVersion: SCENARIO_VERSION,
     prototypeVersion: '0.0.0-evaluation',
     status: 'live',
@@ -357,13 +357,10 @@ async function runOneEvaluation(input: {
 
   const events: KnownGameEvent[] = [startedEvent]
   const loop = new AgentLoop({
-    gateway: new OpenAIResponsesGateway({
-      apiKey: input.apiKey,
-      model: input.model
-    }),
+    gateway: new OpenAIResponsesGateway(input.gatewayConfiguration),
     engine,
     store: input.store,
-    secretsToRedact: [input.apiKey]
+    secretsToRedact: [input.gatewayConfiguration.apiKey]
   })
 
   for (
@@ -401,7 +398,7 @@ async function runOneEvaluation(input: {
   return buildEvaluationRunRecord({
     runId,
     repetition: input.repetition,
-    model: input.model,
+    model: input.gatewayConfiguration.model,
     variant: input.variant,
     scenarioVersion: SCENARIO_VERSION,
     startedAt,
@@ -462,8 +459,7 @@ async function main(): Promise<void> {
         store,
         variant,
         repetition,
-        apiKey: configuration.apiKey,
-        model: configuration.model
+        gatewayConfiguration: configuration
       })
       runs.push(run)
       const partial: EvaluationResultFile = {

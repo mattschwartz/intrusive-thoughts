@@ -61,13 +61,15 @@ export function createApplicationConfiguration(
       environment.INTRUSIVE_THOUGHTS_DATA_ROOT ??
       join(options.userDataPath, 'prototype-data')
   )
+  const secretsToRedact = [
+    environment.OPENAI_API_KEY?.trim(),
+    environment.OPENROUTER_API_KEY?.trim()
+  ].filter((value): value is string => Boolean(value))
 
   return {
     dataRoot,
     gatewayMode,
-    secretsToRedact: [
-      ...(environment.OPENAI_API_KEY ? [environment.OPENAI_API_KEY] : [])
-    ],
+    secretsToRedact,
     createGateway:
       gatewayMode === 'fake'
         ? () => new DiagnosticFakeGateway()
