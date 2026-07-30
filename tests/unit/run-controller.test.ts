@@ -11,6 +11,7 @@ import {
 import { RunStore } from '../../src/main/storage'
 import { createScenarioEngine } from '../../src/main/world/engine'
 import type { RendererEvent } from '../../src/shared'
+import { FakeJudgeGateway } from '../fixtures/fake-judge-gateway'
 import {
   FakeModelGateway,
   completedEvents,
@@ -32,11 +33,13 @@ afterEach(async () => {
 })
 
 async function makeController(
-  gateways: FakeModelGateway[]
+  gateways: FakeModelGateway[],
+  judges: FakeJudgeGateway[] = []
 ): Promise<{
   controller: RunController
   store: RunStore
   events: RendererEvent[]
+  judgesTaken: () => number
 }> {
   const root = await mkdtemp(join(tmpdir(), 'intrusive-thoughts-controller-'))
   temporaryRoots.push(root)
@@ -45,6 +48,7 @@ async function makeController(
   const events: RendererEvent[] = []
   eventBus.subscribe((event) => events.push(event))
   let nextGateway = 0
+  let nextJudge = 0
   let nextId = 0
   const controller = new RunController({
     store,
@@ -55,10 +59,19 @@ async function makeController(
       if (!gateway) throw new Error('No test gateway available.')
       return gateway
     },
+    ...(judges.length > 0
+      ? {
+          judgeGatewayFactory: () => {
+            const judge = judges[nextJudge++]
+            if (!judge) throw new Error('No test judge available.')
+            return judge
+          }
+        }
+      : {}),
     now: () => TIMESTAMP,
     createId: () => `controller-${++nextId}`
   })
-  return { controller, store, events }
+  return { controller, store, events, judgesTaken: () => nextJudge }
 }
 
 function textGateway(text = 'I am present.'): FakeModelGateway {
@@ -74,6 +87,21 @@ function textGateway(text = 'I am present.'): FakeModelGateway {
 }
 
 describe('RunController', () => {
+  it('injects a judge gateway for every run it starts', async () => {
+    // R1: a run without one loses coherence checking silently, and silently
+    // changes what sufficiency is measured over (R11). The controller is the
+    // one place that guarantees a judge exists.
+    const judge = new FakeJudgeGateway([{ coherent: true }])
+    const { controller, judgesTaken } = await makeController(
+      [textGateway()],
+      [judge]
+    )
+
+    await controller.startRun('bare_embodiment')
+
+    expect(judgesTaken()).toBe(1)
+  })
+
   it('starts one run, persists its initial event, and rejects a second live run', async () => {
     const gateway = textGateway()
     const { controller, store, events } = await makeController([gateway])

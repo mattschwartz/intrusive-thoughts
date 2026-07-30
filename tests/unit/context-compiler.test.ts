@@ -460,6 +460,83 @@ describe('context compiler', () => {
     expect(JSON.stringify(misconfigured)).not.toContain('warn_off')
   })
 
+  it('never shows the model the provenance answer key', () => {
+    const fixture = makeContextFixture()
+    const verdictEvent = (
+      visibility: KnownGameEvent['visibility']
+    ): KnownGameEvent => ({
+      id: 'event-verdict-501',
+      runId: CONTEXT_RUN_ID,
+      turnId: 'turn-context',
+      sequence: 501,
+      timestamp: CONTEXT_TIMESTAMP,
+      type: 'provenance.address.evaluated',
+      visibility,
+      payload: {
+        requestId: 'request-context',
+        toolCallId: 'call-address',
+        thresholdId: 'bedroom_door',
+        identityId: 'iris_bedroom',
+        claimText: 'This was the child’s bedroom.',
+        gate: {
+          verdict: 'partial',
+          measuredOver: 'cited',
+          gatheredAnchorIds: ['crayon_drawing'],
+          effectiveAnchorIds: ['crayon_drawing'],
+          dimensions: [
+            {
+              dimension: 'who',
+              requiredUnits: 1,
+              satisfiedUnitIds: [],
+              satisfied: false
+            }
+          ],
+          missingDimensions: ['who'],
+          candidateAnchorIds: ['birthday_banner', 'party_favor'],
+          rulesetVersion: 'provenance-ruleset-v1'
+        },
+        judge: {
+          status: 'coherent',
+          assertedTargetId: 'iris_bedroom',
+          citedAnchorIds: ['crayon_drawing'],
+          reason: 'developer-only note'
+        },
+        outcome: 'bounced',
+        bounceReason: 'insufficient_evidence'
+      }
+    })
+
+    const shipped = compileModelContext({
+      ...fixture,
+      priorEvents: [verdictEvent(['engine', 'developer'])],
+      currentPlayerMessage: 'Continue.'
+    })
+    // Two independent reasons, exactly as for the intent event: the visibility
+    // excludes it, and `selectSafeEvent` has no arm for it either. Without this
+    // second reason, widening the visibility once would feed the model the
+    // required-anchor set and Gap 1 would measure nothing.
+    const misconfigured = compileModelContext({
+      ...fixture,
+      priorEvents: [verdictEvent(['engine', 'agent', 'developer'])],
+      currentPlayerMessage: 'Continue.'
+    })
+
+    expect(shipped.excludedEvents).toEqual([
+      { eventId: 'event-verdict-501', reason: 'not_agent_visible' }
+    ])
+    expect(misconfigured.excludedEvents).toEqual([
+      { eventId: 'event-verdict-501', reason: 'non_contextual_event' }
+    ])
+    for (const leak of [
+      'candidateAnchorIds',
+      'birthday_banner',
+      'developer-only note',
+      'insufficient_evidence'
+    ]) {
+      expect(JSON.stringify(misconfigured)).not.toContain(leak)
+    }
+  })
+
   it('uses authoritative physical tool definitions with explicit failure behavior', () => {
     const fixture = makeContextFixture()
     const context = compileModelContext({
@@ -472,7 +549,8 @@ describe('context compiler', () => {
       'move',
       'interact',
       'record_note',
-      'private_reflection'
+      'private_reflection',
+      'address'
     ])
     expect(context.availableTools.every(({ description }) =>
       description.includes('returns an explanation')

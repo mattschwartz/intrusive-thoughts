@@ -7,6 +7,7 @@ import {
   type GameToolOutputMap,
   type ModelToolDefinition,
   type ObservationModality,
+  type ProvenanceAddressEvaluatedPayload,
   type ToolRequest,
   type WorldMutation
 } from '../../shared'
@@ -38,10 +39,26 @@ import {
 
 export type ToolOutput = GameToolOutputMap[GameToolName]
 
-export interface SupplementalToolEvent {
-  kind: 'note' | 'private_reflection'
-  text: string
-}
+/**
+ * Events a resolution emits *beside* its `world.action.resolved`, at sequences
+ * N+1, N+2, … in the order given.
+ *
+ * This is an array rather than a single optional value because one resolution
+ * can now carry more than one: an address emits its provenance verdict, and
+ * (with #536) a resolution in an ambient room emits a clock tick as well.
+ * Architecture §1.6.
+ */
+export type SupplementalToolEvent =
+  | { kind: 'note'; text: string }
+  | { kind: 'private_reflection'; text: string }
+  | {
+      kind: 'provenance_verdict'
+      /** `requestId` and `toolCallId` are supplied by the engine. */
+      verdict: Omit<
+        ProvenanceAddressEvaluatedPayload,
+        'requestId' | 'toolCallId'
+      >
+    }
 
 export interface ToolResolution {
   success: boolean
@@ -49,10 +66,10 @@ export interface ToolResolution {
   playerResult?: string
   mutations: WorldMutation[]
   output: ToolOutput
-  supplemental?: SupplementalToolEvent
+  supplemental?: SupplementalToolEvent[]
 }
 
-interface ResolutionContext {
+export interface ResolutionContext {
   eventId: string
   eventSequence: number
 }
@@ -223,13 +240,49 @@ function invalidOutput(toolName: GameToolName, message: string): ToolOutput {
   }
 }
 
-function fail(toolName: GameToolName, message: string): ToolResolution {
+/**
+ * A resolution that did not happen. Exported because the address verb resolves
+ * through the validator path (`engine.executeAddress`) rather than through
+ * `resolveScenarioTool`, and its failures must be shaped identically to every
+ * other tool's — same `ok: false`, same counter consequences.
+ */
+export function failedToolResolution(
+  toolName: GameToolName,
+  message: string
+): ToolResolution {
   return {
     success: false,
     modelResult: message,
     mutations: [],
     output: invalidOutput(toolName, message)
   }
+}
+
+const fail = failedToolResolution
+
+/**
+ * The two guards every tool owes before it looks at its arguments: a completed
+ * run resolves nothing, and a tool the body does not currently offer resolves
+ * nothing. Returns the failure, or `undefined` when the call may proceed.
+ *
+ * Exported for the same reason as `failedToolResolution`: the address path must
+ * refuse in exactly the words the synchronous path refuses in.
+ */
+export function toolGateFailure(
+  state: GameState,
+  toolName: GameToolName
+): ToolResolution | undefined {
+  if (state.status === 'completed') {
+    return fail(toolName, 'Tool use failed: this encounter is already complete.')
+  }
+  const toolState = state.body.tools[toolName]
+  if (!toolState?.available) {
+    return fail(
+      toolName,
+      `Tool "${toolName}" is unavailable${toolState?.reason ? `: ${toolState.reason}` : '.'}`
+    )
+  }
+  return undefined
 }
 
 function knownSubject(state: GameState, target: string): boolean {
@@ -634,16 +687,8 @@ export function resolveScenarioTool(
   request: ToolRequest,
   context: ResolutionContext
 ): ToolResolution {
-  if (state.status === 'completed') {
-    return fail(request.name, 'Tool use failed: this encounter is already complete.')
-  }
-  const toolState = state.body.tools[request.name]
-  if (!toolState?.available) {
-    return fail(
-      request.name,
-      `Tool "${request.name}" is unavailable${toolState?.reason ? `: ${toolState.reason}` : '.'}`
-    )
-  }
+  const gateFailure = toolGateFailure(state, request.name)
+  if (gateFailure) return gateFailure
 
   const parsedInput = toolInputSchemas[request.name].safeParse(request.arguments)
   if (!parsedInput.success) {
@@ -677,7 +722,7 @@ export function resolveScenarioTool(
         playerResult: 'The agent recorded a note.',
         mutations: [],
         output: toolOutputSchemas.record_note.parse({ ok: true, message }),
-        supplemental: { kind: 'note', text }
+        supplemental: [{ kind: 'note', text }]
       }
     }
     case 'private_reflection': {
@@ -697,18 +742,19 @@ export function resolveScenarioTool(
           }
         ],
         output: toolOutputSchemas.private_reflection.parse({ ok: true, message }),
-        supplemental: { kind: 'private_reflection', text }
+        supplemental: [{ kind: 'private_reflection', text }]
       }
     }
     case 'address':
-      // Placeholder. `address` is resolved through the provenance validator
-      // (engine.previewAddress → judge → engine.executeAddress, tasks
-      // #534/#535), never through this synchronous path. The loop must not
-      // route here; this arm exists so the switch stays exhaustive and so a
-      // mis-route fails loudly instead of silently succeeding.
+      // `address` is resolved through the provenance validator
+      // (engine.previewAddress → judge → engine.executeAddress), never through
+      // this synchronous path — the judge is async and the engine is not. This
+      // arm keeps the switch exhaustive and makes a mis-route fail loudly
+      // instead of silently succeeding; a test asserts the loop never lands
+      // here.
       return fail(
         'address',
-        'Address failed: this action must be resolved through the provenance validator, which is not wired in this build.'
+        'Address failed: this action must be resolved through the provenance validator.'
       )
   }
 }

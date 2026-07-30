@@ -78,7 +78,7 @@ describe('deterministic kitchen scenario', () => {
     expect(state.counters).toEqual({})
   })
 
-  it('publishes exactly the five resolvable tool definitions and authored actions', () => {
+  it('publishes exactly the six resolvable tool definitions and authored actions', () => {
     const engine = makeDeterministicEngine()
     const definitions = engine.getToolDefinitions(makeInitialState(engine))
 
@@ -87,7 +87,8 @@ describe('deterministic kitchen scenario', () => {
       'move',
       'interact',
       'record_note',
-      'private_reflection'
+      'private_reflection',
+      'address'
     ])
     expect(definitions.find(({ name }) => name === 'interact')?.description).toContain(
       `${OBJECT_IDS.window}/${INTERACT_ACTIONS.testWindowWithThread}`
@@ -97,37 +98,35 @@ describe('deterministic kitchen scenario', () => {
     )
   })
 
-  it('withholds the address verb until the provenance validator is wired', () => {
+  it('publishes the address verb from turn one, and withholds it when the body does not offer it', () => {
+    // §1.7: available from turn one. Addressing a threshold that answers to no
+    // identity fails before the gate, and an early attempt is Gap 1 signal.
     const engine = makeDeterministicEngine()
     const state = makeInitialState(engine)
 
-    expect(state.body.tools.address).toEqual({
-      available: false,
-      reason: 'the provenance validator is not yet wired'
-    })
-    expect(engine.getToolDefinitions(state).map(({ name }) => name)).not.toContain(
+    expect(state.body.tools.address).toEqual({ available: true })
+    expect(engine.getToolDefinitions(state).map(({ name }) => name)).toContain(
       'address'
     )
 
-    const offered = engine.getToolDefinitions({
+    const withheld = engine.getToolDefinitions({
       ...state,
       body: {
         ...state.body,
-        tools: { ...state.body.tools, address: { available: true } }
+        tools: {
+          ...state.body.tools,
+          address: { available: false, reason: 'test' }
+        }
       }
     })
-    expect(offered.map(({ name }) => name)).toContain('address')
+    expect(withheld.map(({ name }) => name)).not.toContain('address')
   })
 
   it('refuses to resolve address through the synchronous tool path', () => {
+    // The judge is async and the engine is not, so `address` never resolves
+    // through `resolveScenarioTool`. This arm exists so a mis-route fails
+    // loudly; the loop is asserted never to reach it in agent-loop.test.ts.
     const harness = makeScenarioHarness()
-    harness.state = {
-      ...harness.state,
-      body: {
-        ...harness.state.body,
-        tools: { ...harness.state.body.tools, address: { available: true } }
-      }
-    }
 
     const result = harness.execute('address', {
       threshold: THRESHOLD_IDS.serviceDoor,
@@ -136,6 +135,9 @@ describe('deterministic kitchen scenario', () => {
 
     expect(result.modelResult).toContain('provenance validator')
     expect(result.output).toMatchObject({ ok: false, opened: false })
+    expect(
+      result.events.some((event) => event.type === 'provenance.address.evaluated')
+    ).toBe(false)
     expect(harness.state.locationId).toBe(LOCATION_IDS.kitchen)
   })
 

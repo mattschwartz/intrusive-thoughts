@@ -286,6 +286,22 @@ export function anchorsForIdentity(
 }
 
 /**
+ * The authored labels for a set of anchor ids, in the order given. Throws on an
+ * id outside the catalog, for the same reason `anchorsForIdentity` does: a label
+ * that silently resolved to nothing would put an empty noun in the agent's
+ * mouth.
+ */
+export function anchorLabels(anchorIds: readonly string[]): string[] {
+  return anchorIds.map((anchorId) => {
+    const anchor = ANCHORS[anchorId]
+    if (!anchor) {
+      throw new Error(`No anchor "${anchorId}" is registered in the catalog.`)
+    }
+    return anchor.label
+  })
+}
+
+/**
  * Whether canonical state grounds this anchor. Derived at evaluation time, so
  * there is no separate gathered-anchors list to keep in sync and cross-room
  * persistence is free: observations and inventory are run-scoped and untouched

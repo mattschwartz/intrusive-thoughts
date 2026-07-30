@@ -50,6 +50,7 @@ function createWindow(): void {
     engine: scenarioEngine,
     eventBus,
     gatewayFactory: configuration.createGateway,
+    judgeGatewayFactory: configuration.createJudgeGateway,
     secretsToRedact: configuration.secretsToRedact
   })
   registerIpc({

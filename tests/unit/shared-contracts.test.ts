@@ -170,6 +170,74 @@ describe('shared event contracts', () => {
     expect(parsed).toEqual(event)
   })
 
+  it('carries the provenance verdict as a known event, gate embedded verbatim', () => {
+    const gate = {
+      verdict: 'sufficient' as const,
+      measuredOver: 'cited' as const,
+      gatheredAnchorIds: ['crayon_drawing', 'birthday_banner'],
+      effectiveAnchorIds: ['crayon_drawing', 'birthday_banner'],
+      dimensions: [
+        {
+          dimension: 'what' as const,
+          requiredUnits: 1,
+          satisfiedUnitIds: ['crayon_drawing'],
+          satisfied: true
+        }
+      ],
+      missingDimensions: [],
+      candidateAnchorIds: [],
+      rulesetVersion: 'provenance-ruleset-v1'
+    }
+    const event = {
+      id: 'event-verdict',
+      runId: 'run-1',
+      turnId: 'turn-1',
+      sequence: 4,
+      timestamp,
+      type: 'provenance.address.evaluated',
+      visibility: ['engine', 'developer'],
+      payload: {
+        requestId: 'request-1',
+        toolCallId: 'call-1',
+        thresholdId: 'bedroom_door',
+        identityId: 'iris_bedroom',
+        claimText: 'This was her room.',
+        gate,
+        judge: {
+          status: 'coherent',
+          assertedTargetId: 'iris_bedroom',
+          citedAnchorIds: ['crayon_drawing'],
+          reason: 'developer only',
+          model: 'judge-model',
+          promptVersion: 'provenance-judge-v1',
+          latencyMs: 40
+        },
+        outcome: 'opened'
+      }
+    }
+
+    const parsed = knownGameEventSchema.parse(JSON.parse(JSON.stringify(event)))
+    expect(parsed).toEqual(event)
+    expect(parsed.type === 'provenance.address.evaluated' ? parsed.payload.gate : undefined)
+      .toEqual(gate)
+
+    // `not_addressable` is gone: an address at a threshold that answers to no
+    // identity is an ordinary tool failure with no verdict at all. A1.
+    expect(
+      knownGameEventSchema.safeParse({
+        ...event,
+        payload: { ...event.payload, outcome: 'bounced', bounceReason: 'not_addressable' }
+      }).success
+    ).toBe(false)
+    // And the gate object cannot be subsetted on the way in.
+    expect(
+      knownGameEventSchema.safeParse({
+        ...event,
+        payload: { ...event.payload, gate: { verdict: 'sufficient' } }
+      }).success
+    ).toBe(false)
+  })
+
   it('requires valid common event fields and known payloads', () => {
     const invalid = {
       id: 'event-1',

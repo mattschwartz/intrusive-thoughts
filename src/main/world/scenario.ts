@@ -184,15 +184,11 @@ export function createInitialScenarioState(
         interact: { available: true },
         record_note: { available: true },
         private_reflection: { available: true },
-        // The address verb is plumbed but not yet resolvable: the gate (#534)
-        // and the judge (#535) land next. Architecture §1.7 wants it available
-        // from turn one; flip this to `{ available: true }` when the validator
-        // path exists. Publishing a verb that can only fail would poison a
-        // playtest, so it stays closed until it can answer.
-        address: {
-          available: false,
-          reason: 'the provenance validator is not yet wired'
-        }
+        // Available from turn one (§1.7). Addressing a threshold that answers
+        // to no identity fails before the gate, costing one pure function
+        // call — and letting the player attempt an address early is *desirable*
+        // signal for the Gap 1 read: do they try to reason, and when?
+        address: { available: true }
       }
     },
     observations: [],

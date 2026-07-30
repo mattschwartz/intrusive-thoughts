@@ -10,6 +10,15 @@ import {
   turnIdSchema
 } from './ids'
 import {
+  anchorIdSchema,
+  provenanceBounceReasonSchema,
+  provenanceGateResultSchema,
+  provenanceIdentityIdSchema,
+  provenanceJudgeStatusSchema,
+  provenanceOutcomeSchema,
+  thresholdIdSchema
+} from './provenance'
+import {
   audienceSchema,
   bodyToolStateSchema,
   gameSnapshotSchema,
@@ -320,6 +329,61 @@ export const playerIntentMatchedEventSchema = eventSchema(
     .strict()
 )
 
+/**
+ * The justification record for one address. Architecture §1.6.
+ *
+ * **Visibility is `['engine', 'developer']` and must stay that way.** The
+ * payload carries `candidateAnchorIds`, the per-dimension assessment and the
+ * full gathered set — the answer key. If it were agent-visible the context
+ * compiler would feed that key back to the model and Gap 1 would measure
+ * nothing. The agent learns the outcome through `world.action.resolved`'s
+ * authored bounce prose; the player through `playerResult`.
+ *
+ * **It carries no mutations and the reducer does not act on it.** Every state
+ * consequence — the threshold-opened flag, the axis deltas — rides on the
+ * `world.action.resolved` event's `mutations` array like every other tool. This
+ * is stronger than "replay reduces the recorded verdict": replay never has to
+ * interpret the verdict at all, and can never re-derive it.
+ *
+ * Emitted **iff an identity resolved**. An address at a threshold that answers
+ * to no identity is an ordinary tool failure, which is what lets `gate` stay
+ * required and the record stay readable.
+ */
+export const provenanceAddressEvaluatedEventSchema = eventSchema(
+  'provenance.address.evaluated',
+  z
+    .object({
+      requestId: requestIdSchema,
+      toolCallId: toolCallIdSchema,
+      thresholdId: thresholdIdSchema,
+      identityId: provenanceIdentityIdSchema,
+      claimText: z.string().max(2_000),
+      /** The `AddressGateResult` verbatim — one shape, one definition. §1.2. */
+      gate: provenanceGateResultSchema,
+      judge: z
+        .object({
+          status: provenanceJudgeStatusSchema,
+          /** The identity the claim named, resolved against the catalog, or null. */
+          assertedTargetId: provenanceIdentityIdSchema.nullable().default(null),
+          citedAnchorIds: z.array(anchorIdSchema).default([]),
+          /** Developer-visible only. Never reaches the agent or the player. */
+          reason: z.string(),
+          model: z.string().min(1).optional(),
+          promptVersion: z.string().min(1).optional(),
+          latencyMs: z.number().nonnegative().optional()
+        })
+        .strict(),
+      outcome: provenanceOutcomeSchema,
+      bounceReason: provenanceBounceReasonSchema.optional()
+    })
+    .strict()
+)
+export type ProvenanceAddressEvaluatedEvent = z.infer<
+  typeof provenanceAddressEvaluatedEventSchema
+>
+export type ProvenanceAddressEvaluatedPayload =
+  ProvenanceAddressEvaluatedEvent['payload']
+
 export const turnCompletedEventSchema = eventSchema(
   'turn.completed',
   z
@@ -394,6 +458,7 @@ export const knownGameEventSchema = z.discriminatedUnion('type', [
   agentPrivateReflectionEventSchema,
   agentNoteRecordedEventSchema,
   playerIntentMatchedEventSchema,
+  provenanceAddressEvaluatedEventSchema,
   turnCompletedEventSchema,
   turnCancelledEventSchema,
   loopFailedEventSchema,

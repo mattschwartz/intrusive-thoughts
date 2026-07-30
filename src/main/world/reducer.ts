@@ -110,6 +110,10 @@ function applyKnownEvent(state: GameState, event: KnownGameEvent): GameState {
       return { ...state, notes: [...state.notes, event.payload.note] }
     case 'loop.failed':
       return { ...state, status: 'failed' }
+    // The verdict is a justification record, not a mutation carrier: replay
+    // folds the `world.action.resolved` beside it and never interprets — or
+    // re-derives — the verdict itself. §1.6.
+    case 'provenance.address.evaluated':
     case 'context.compiled':
     case 'agent.text.delta':
     case 'agent.text.completed':

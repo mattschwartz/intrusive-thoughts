@@ -24,7 +24,7 @@ import {
   replaySessionSchema,
   type StoredRunSummary
 } from '../../shared'
-import { AgentLoop, type ModelGateway } from '../agent'
+import { AgentLoop, type JudgeGateway, type ModelGateway } from '../agent'
 import type { RunStore } from '../storage'
 import { SCENARIO_VERSION } from '../world/scenario'
 import { reduceGameEvent } from '../world/reducer'
@@ -47,6 +47,13 @@ export interface RunControllerOptions {
   engine: ScenarioEngine
   eventBus: RendererEventBus
   gatewayFactory: () => ModelGateway
+  /**
+   * Mirrors `gatewayFactory`. Optional on the type so tests that never address
+   * anything stay unchanged, but a real run should always pass one: without it
+   * every address records `judge.status: 'unavailable'` and silently degrades to
+   * gathered-only sufficiency (risks R1 and R11).
+   */
+  judgeGatewayFactory?: () => JudgeGateway
   prototypeVersion?: string
   now?: () => string
   createId?: () => string
@@ -126,6 +133,7 @@ export class RunController {
   private readonly engine: ScenarioEngine
   private readonly eventBus: RendererEventBus
   private readonly gatewayFactory: () => ModelGateway
+  private readonly judgeGatewayFactory?: () => JudgeGateway
   private readonly prototypeVersion: string
   private readonly now: () => string
   private readonly createId: () => string
@@ -142,6 +150,9 @@ export class RunController {
     this.engine = options.engine
     this.eventBus = options.eventBus
     this.gatewayFactory = options.gatewayFactory
+    if (options.judgeGatewayFactory) {
+      this.judgeGatewayFactory = options.judgeGatewayFactory
+    }
     this.prototypeVersion = options.prototypeVersion ?? '0.0.0-prototype'
     this.now = options.now ?? (() => new Date().toISOString())
     this.createId = options.createId ?? (() => randomUUID())
@@ -203,10 +214,12 @@ export class RunController {
       createdAt
     })
     let active: ActiveRun
+    const judge = this.judgeGatewayFactory?.()
     const loop = new AgentLoop({
       gateway,
       engine: this.engine,
       store: this.store,
+      ...(judge ? { judge } : {}),
       secretsToRedact: this.secretsToRedact,
       onPersistedEvent: (event) => this.forwardLiveEvent(active, event)
     })

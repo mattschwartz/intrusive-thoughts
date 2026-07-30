@@ -14,6 +14,7 @@ import {
   type KnownGameEvent,
   type PromptVariant
 } from '../../src/shared'
+import type { FakeJudgeGateway } from './fake-judge-gateway'
 import {
   FakeModelGateway,
   completedEvents,
@@ -23,6 +24,7 @@ import {
   textDelta,
   type FakeModelRound
 } from './fake-model-gateway'
+import { findTestAddressThreshold } from './provenance-cases'
 
 const FIXTURE_TIMESTAMP = '2026-07-27T20:00:00.000Z'
 
@@ -229,6 +231,7 @@ export interface ScriptedIntegrationHarness {
   runId: string
   engine: ReturnType<typeof createScenarioEngine>
   gateway: FakeModelGateway
+  judge?: FakeJudgeGateway
   store: RunStore
   loop: AgentLoop
   state: GameState
@@ -246,6 +249,11 @@ export async function createScriptedIntegrationHarness(options: {
   dataRoot?: string
   limits?: AgentLoopOptions['limits']
   onPersistedEvent?: (event: KnownGameEvent) => void
+  judge?: FakeJudgeGateway
+  /** Opt in to the synthetic addressable threshold. See provenance-cases. */
+  addressable?: boolean
+  /** Stands in for acts the shipped content does not carry yet. */
+  stateTransform?: (state: GameState) => GameState
 }): Promise<ScriptedIntegrationHarness> {
   const dataRoot =
     options.dataRoot ??
@@ -255,9 +263,13 @@ export async function createScriptedIntegrationHarness(options: {
   let worldEvent = 0
   const engine = createScenarioEngine({
     now: () => FIXTURE_TIMESTAMP,
-    createEventId: ({ type }) => `world-${++worldEvent}-${type}`
+    createEventId: ({ type }) => `world-${++worldEvent}-${type}`,
+    ...(options.addressable
+      ? { findAddressThreshold: findTestAddressThreshold }
+      : {})
   })
   let state = engine.createInitialState(runId, variant)
+  state = options.stateTransform?.(state) ?? state
   const store = new RunStore({
     dataRoot,
     now: () => FIXTURE_TIMESTAMP
@@ -313,6 +325,7 @@ export async function createScriptedIntegrationHarness(options: {
     gateway,
     engine,
     store,
+    ...(options.judge ? { judge: options.judge } : {}),
     now: () => FIXTURE_TIMESTAMP,
     nowMs: () => (clock += 5),
     createId: (kind) => `${kind}-${++id}`,
@@ -324,6 +337,7 @@ export async function createScriptedIntegrationHarness(options: {
     runId,
     engine,
     gateway,
+    ...(options.judge ? { judge: options.judge } : {}),
     store,
     loop,
     state,

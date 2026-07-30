@@ -16,10 +16,16 @@ import {
   type KnownGameEvent
 } from '../../shared'
 import type { RunStore } from '../storage'
-import type { ScenarioEngine } from '../world/engine'
+import type { AddressPreview, JudgeOutcome } from '../world/address'
+import type { ScenarioEngine, ToolExecutionResult } from '../world/engine'
+import { anchorsForIdentity } from '../world/provenance'
 import { reduceGameEvent } from '../world/reducer'
 import { compileModelContext } from './context-compiler'
 import { AgentLoopError, safeErrorMessage } from './errors'
+import {
+  JUDGE_CLAIM_CHARACTER_LIMIT,
+  type JudgeGateway
+} from './judge-gateway'
 import {
   resolveAgentLoopLimits,
   type AgentLoopLimitOverrides,
@@ -45,6 +51,14 @@ export interface AgentLoopOptions {
   gateway: ModelGateway
   engine: ScenarioEngine
   store: AgentLoopStore | Pick<RunStore, 'appendEvents' | 'writeSnapshot'>
+  /**
+   * Optional so that suites with no address flow compile unchanged. When it is
+   * absent every address records `judge.status: 'unavailable'`, which is the
+   * fail-open path — and is exactly risk R1: a misconfigured run loses coherence
+   * checking without failing. `RunController` always injects one, and the status
+   * is on every verdict so #539 can see when it did not.
+   */
+  judge?: JudgeGateway
   limits?: AgentLoopLimitOverrides
   now?: () => string
   nowMs?: () => number
@@ -155,6 +169,7 @@ export class AgentLoop {
   private readonly gateway: ModelGateway
   private readonly engine: ScenarioEngine
   private readonly store: AgentLoopStore
+  private readonly judgeGateway?: JudgeGateway
   private readonly limits: AgentLoopLimits
   private readonly now: () => string
   private readonly nowMs: () => number
@@ -167,12 +182,109 @@ export class AgentLoop {
     this.gateway = options.gateway
     this.engine = options.engine
     this.store = options.store
+    if (options.judge) this.judgeGateway = options.judge
     this.limits = resolveAgentLoopLimits(options.limits)
     this.now = options.now ?? (() => new Date().toISOString())
     this.nowMs = options.nowMs ?? (() => Date.now())
     this.createId = options.createId ?? (() => randomUUID())
     this.onPersistedEvent = options.onPersistedEvent
     this.secretsToRedact = options.secretsToRedact ?? []
+  }
+
+  /**
+   * The one async tool branch in the loop. It runs **after** the pure pre-gate
+   * and hands back only a `JudgeOutcome`; the engine recomputes the gate itself.
+   *
+   * Two skips happen before any model is reached:
+   *
+   * - the threshold answers to no identity, so there is nothing to judge;
+   * - the gathered-only pre-gate says `unsupported`, so this player has grounded
+   *   nothing at all and a claim from them never reaches a model.
+   *
+   * Everything else fails **open**. A timeout, a transport error, an
+   * unparseable reply or a missing gateway all record `unavailable` and pass
+   * through, because the security property lives entirely in the gate and
+   * failing closed would make the only ending unreachable during a provider
+   * blip. Note risk R11: `unavailable` also silently changes what sufficiency is
+   * measured over, which is why `measuredOver` is on every verdict.
+   *
+   * If a second async tool is ever proposed, generalize this branch — do not add
+   * a second special case. Two special cases is where this seam rots. (R7.)
+   */
+  private async runJudge(
+    preview: AddressPreview,
+    input: { threshold: string; claim: string },
+    turnSignal: AbortSignal
+  ): Promise<JudgeOutcome> {
+    if (!preview.addressable || !preview.identity || !preview.gate) {
+      return {
+        status: 'skipped',
+        reason: `Threshold "${input.threshold}" answers to no provenance identity.`
+      }
+    }
+    if (preview.gate.verdict === 'unsupported') {
+      return {
+        status: 'skipped',
+        reason:
+          'The gathered-only pre-gate found no grounded evidence, so no judge was called.'
+      }
+    }
+    const gateway = this.judgeGateway
+    if (!gateway) {
+      return {
+        status: 'unavailable',
+        reason: 'No judge gateway is configured for this run.'
+      }
+    }
+
+    const controller = new AbortController()
+    const abortFromTurn = (): void =>
+      controller.abort(turnSignal.reason ?? new Error('Turn cancelled.'))
+    turnSignal.addEventListener('abort', abortFromTurn, { once: true })
+    if (turnSignal.aborted) abortFromTurn()
+    const timeout = setTimeout(
+      () => controller.abort(new Error('Judge timeout exceeded.')),
+      this.limits.judgeTimeoutMs
+    )
+    const startedAt = this.nowMs()
+    try {
+      const result = await gateway.judge({
+        // Truncated here as well as in the gateway: the recorded claim is the
+        // player's, but what a judge is shown is bounded by the loop.
+        claim: input.claim.slice(0, JUDGE_CLAIM_CHARACTER_LIMIT),
+        identity: {
+          id: preview.identity.id,
+          label: preview.identity.label
+        },
+        // The catalog and nothing else. No gathered set, no observations, no
+        // inventory, no flags: the judge cannot declare sufficiency because it
+        // lacks the input. §1.1.
+        anchorCatalog: anchorsForIdentity(preview.identity).map((anchor) => ({
+          id: anchor.id,
+          label: anchor.label
+        })),
+        signal: controller.signal
+      })
+      return {
+        status: result.coherent ? 'coherent' : 'incoherent',
+        assertedTargetId: result.assertedTargetId,
+        citedAnchorIds: result.citedAnchorIds,
+        reason: result.reason,
+        model: gateway.model,
+        promptVersion: gateway.promptVersion,
+        latencyMs: Math.max(0, this.nowMs() - startedAt)
+      }
+    } catch (error) {
+      // Never rethrown. A judge outage must not break the run; the turn's own
+      // abort is still observed at the top of the response loop.
+      return {
+        status: 'unavailable',
+        reason: safeErrorMessage(error, this.secretsToRedact)
+      }
+    } finally {
+      clearTimeout(timeout)
+      turnSignal.removeEventListener('abort', abortFromTurn)
+    }
   }
 
   async runTurn(rawInput: RunAgentTurnInput): Promise<AgentTurnResult> {
@@ -619,21 +731,46 @@ export class AgentLoop {
                   )
                   output = { ok: false, message: reason }
                 } else {
-                  const result = this.engine.executeTool(
-                    state,
-                    {
-                      callId: call.call_id,
-                      name: knownTool.data,
-                      arguments: parsedArguments.value
-                    },
-                    {
-                      turnId,
-                      requestId,
-                      ...(round.responseId
-                        ? { responseId: round.responseId }
-                        : {})
-                    }
-                  )
+                  const toolRequest = {
+                    callId: call.call_id,
+                    name: knownTool.data,
+                    arguments: parsedArguments.value
+                  }
+                  const toolMetadata = {
+                    turnId,
+                    requestId,
+                    ...(round.responseId
+                      ? { responseId: round.responseId }
+                      : {})
+                  }
+                  // The single async tool branch. Gate, then judge, then the
+                  // authoritative synchronous pass — and the preview's gate is
+                  // deliberately dropped on the floor between them, so the only
+                  // thing that crosses inward is the judge outcome.
+                  let result: ToolExecutionResult
+                  if (knownTool.data === 'address') {
+                    const input = toolInputSchemas.address.parse(
+                      parsedArguments.value
+                    )
+                    const preview = this.engine.previewAddress(state, input)
+                    const judge = await this.runJudge(
+                      preview,
+                      input,
+                      abortController.signal
+                    )
+                    result = this.engine.executeAddress(
+                      state,
+                      toolRequest,
+                      toolMetadata,
+                      judge
+                    )
+                  } else {
+                    result = this.engine.executeTool(
+                      state,
+                      toolRequest,
+                      toolMetadata
+                    )
+                  }
                   await persistMany(result.events, result.nextState)
                   output = result.output
                 }
