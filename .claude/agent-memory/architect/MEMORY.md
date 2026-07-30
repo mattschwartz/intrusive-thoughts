@@ -1,3 +1,3 @@
 # Architect Memory
 
-- [v1 structural decisions](architecture_v1-structural-decisions.md) — provenance gate-then-judge, axes as canonical state, kitchen reuse widens closed contracts, behavior is model-conditioned not engine-gated.
+- [v1 structural decisions](architecture_v1-structural-decisions.md) — where the v1 architecture spec lives, plus how the design↔architecture handoff works on this team.
