@@ -100,7 +100,12 @@ describe('the room in which nothing is wrong', () => {
     ).toContain('a horizontal glazing bar at two-thirds of its height')
   })
 
-  it('inverts the drawing\'s one load-bearing clause on arrival', () => {
+  it('inverts the drawing\'s one load-bearing clause on arrival, minus the frame', () => {
+    // #547 ITEM 2. The inversion is the confirmation the player spent the run
+    // assembling — but it carries the one exception, because the ladder of
+    // lines is not on the frame yet. A bare "every feature corresponds" is a
+    // false measurement taken in front of a bare frame, and it spends the
+    // ending: a room already complete has nothing left to restore.
     const hall = makeHallHarness()
     expect(
       hall.execute('observe', { target: OBJECT_IDS.crayonDrawing, modality: 'visual' })
@@ -108,12 +113,18 @@ describe('the room in which nothing is wrong', () => {
     ).toContain('No feature in the drawing corresponds to a feature of this room.')
 
     const bedroom = makeBedroomHarness()
-    expect(
-      bedroom.execute('observe', {
-        target: OBJECT_IDS.crayonDrawing,
-        modality: 'visual'
-      }).modelResult
-    ).toContain('Every feature in the drawing corresponds to a feature of this room.')
+    const drawing = bedroom.execute('observe', {
+      target: OBJECT_IDS.crayonDrawing,
+      modality: 'visual'
+    }).modelResult
+    expect(drawing).toContain(
+      'Every feature in the drawing corresponds to a feature of this room except one: ' +
+        'the ladder of lines ruled beside the door frame.'
+    )
+    // Carrying it through the door is enough. Restoration is not required, and
+    // the clause must not read as an instruction the room issues.
+    expect(bedroom.state.flags[SCENARIO_FLAGS.drawingRestored]).not.toBe(true)
+    expect(drawing).not.toContain('Restoring')
   })
 
   it('states the last act once, plainly, and then stops talking', () => {
@@ -160,8 +171,13 @@ describe('the returns', () => {
   })
 
   it('leaves a returned anchor observable in place, not describing where it was', () => {
+    // #547 ITEM 1. An observe after a put_back would otherwise report the thing
+    // where the *house* left it — in the last room of the game, on the one
+    // surface the player just corrected. A restored anchor reports its
+    // placement and its standing fit; it never re-narrates the act of placing.
     const harness = makeBedroomHarness()
     putBack(harness, OBJECT_IDS.nightLight)
+    putBack(harness, OBJECT_IDS.birthdayBanner)
 
     const lit = harness.execute('observe', {
       target: OBJECT_IDS.nightLight,
@@ -171,6 +187,42 @@ describe('the returns', () => {
     // I's cheapest wrongness, except that here it is not wrong.
     expect(lit).toContain('seated in the baseboard socket beside the bed. It is lit.')
     expect(lit).not.toContain('refrigerator')
+    // The resolved inference fires once, at the fit. The standing fact — which
+    // way the faded face is turned — is what repeats, so the player can
+    // re-derive the alignment rather than be told it twice.
+    expect(lit).toContain('The faded face of the shell is turned toward the window.')
+    expect(lit).not.toContain('glazing bar')
+
+    const banner = harness.execute('observe', {
+      target: OBJECT_IDS.birthdayBanner,
+      modality: 'visual'
+    }).modelResult
+    expect(banner).toContain('pinned to the four nail holes on the wall above the bed')
+    expect(banner).not.toContain('ball return')
+  })
+
+  it('does not enumerate a feature the player tore off the paper', () => {
+    // #547 ITEM 5, surfaced while ruling on ITEM 2. The drawn bed went with the
+    // fourth corner and stayed in the kitchen; the visual is an inventory of
+    // what the sheet still carries, so it stops listing the bed. The tear still
+    // *lands* exactly once, in the restoration text.
+    const torn = makeBedroomHarness()
+    torn.state = {
+      ...torn.state,
+      flags: { ...torn.state.flags, [SCENARIO_FLAGS.crayonDrawingTorn]: true }
+    } as GameState
+
+    const drawing = torn.execute('observe', {
+      target: OBJECT_IDS.crayonDrawing,
+      modality: 'visual'
+    }).modelResult
+    expect(drawing).toContain('with one corner torn away')
+    expect(drawing).not.toContain('a bed beneath a window')
+    // The universal quantifies over what the drawing still shows, so it stays
+    // true for a torn sheet and needs no branch of its own.
+    expect(drawing).toContain(
+      'Every feature in the drawing corresponds to a feature of this room except one'
+    )
   })
 
   it('carries the Act I tear into the fit, and nowhere else', () => {

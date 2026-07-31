@@ -209,15 +209,21 @@ describe('the injury is survivable, and it never blocks evidence', () => {
     expect(torn.modelResult).toContain('with the drawn bed still on it')
     expect(harness.state.flags[SCENARIO_FLAGS.crayonDrawingTorn]).toBe(true)
     expect(harness.state.inventory).toContain(OBJECT_IDS.crayonDrawing)
-    // The tear reaches exactly one place: the touch description, and (in #537)
-    // the restoration text. It reduces nothing.
+    // The tear is *reported* wherever the paper is described — a sensor does
+    // not list a feature that is no longer on the sheet (#547 ITEM 5) — and it
+    // *lands* exactly once, in the restoration text. It reduces nothing.
     expect(observe(harness, OBJECT_IDS.crayonDrawing, 'touch').modelResult).toContain(
       'The fourth corner is torn away'
     )
     expect(isAnchorGathered(harness.state, ANCHORS[ANCHOR_IDS.crayonDrawing])).toBe(
       false
     )
-    expect(observe(harness, OBJECT_IDS.crayonDrawing).output.ok).toBe(true)
+    const visual = observe(harness, OBJECT_IDS.crayonDrawing)
+    expect(visual.output.ok).toBe(true)
+    expect(visual.modelResult).toContain('with one corner torn away')
+    expect(visual.modelResult).not.toContain('a bed beneath a window')
+    // Still the grounding modality. The scar changes what the paper says, never
+    // what the paper is worth.
     expect(isAnchorGathered(harness.state, ANCHORS[ANCHOR_IDS.crayonDrawing])).toBe(
       true
     )
