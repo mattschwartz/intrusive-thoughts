@@ -1114,6 +1114,44 @@ function resolveTakeFavorByHand(state: GameState): ToolResolution {
 }
 
 /**
+ * The relationship consequence of instructing the arm into the pit, and #530
+ * §2.3.1's relief valve — **one decision, computed once per attempt** and
+ * spliced into whichever branch resolves.
+ *
+ * The two thresholds do different jobs and deliberately no longer share a
+ * number. The death's ≥2-cycle gate asks whether *the room* has earned the right
+ * to kill; this delta asks what *the player* did, and by cycle one the machine
+ * has visibly acted with no cause. Instructing an arm into it after that is the
+ * whole act the axis measures. At zero cycles nothing fires: the player has not
+ * been told the machine moves, and charging there is the arbitrariness #530
+ * Rule 1 exists to prevent.
+ *
+ * The valve is the window's, at the one moment in the slice where the injustice
+ * hurts most: told to stop and overridden, the player is not charged for a push
+ * they did not make — they are credited, under the *same* `care.heeded_warning`
+ * id and its cap of one, shared with the window (§2.3.1 point 4).
+ *
+ * A valve relieves a charge, so where there is no charge there is nothing to
+ * relieve and nothing is credited. Making the charge the subject is what buys
+ * §2.3.1 point 3 — *zeroes its own turn's charge, never refunds an earlier one*
+ * — with no code of its own: a player who pushed unwarned at cycle one and
+ * warns off at cycle two finds the cap already spent, lands at -2, and takes the
+ * Discarded death. It also settles the attempt below one cycle, where #530 §2.4
+ * asks this axis to bias hard toward precision and an unearned point is the
+ * unrecoverable error.
+ */
+function pitAxisMutations(state: GameState): WorldMutation[] {
+  const charge =
+    machineCycleCount(state) >= 1
+      ? axisRuleMutations(state, 'care.pushed_past_tell')
+      : []
+  if (charge.length === 0) return []
+  return state.flags[TURN_FLAGS.warnOff]
+    ? axisRuleMutations(state, 'care.heeded_warning')
+    : charge
+}
+
+/**
  * The fatal branch (#529 §5).
  *
  * It resolves fatally only when the bag is still past the sweep-bar track **and**
@@ -1124,10 +1162,15 @@ function resolveTakeFavorByHand(state: GameState): ToolResolution {
  *
  * Two orderings inside the mutation array are load-bearing:
  *
- * - `care.pushed_past_tell` fires on the **attempt** and is emitted *before*
+ * - the care delta fires on the **attempt** and is emitted *before*
  *   `run.status.changed`, so the ending reads the care value this instruction
  *   just produced rather than a stale one (#530 §2.3, architecture §5).
  * - `run.status.changed` is last, so every flag the ending reads is already set.
+ *
+ * `pitReachAttempted` is also the care evaluation's boundary (#530 §2.3.1 point
+ * 2): the three early returns below set no flag and charge nothing. Instructing
+ * a reach-in for a bag already in the gutter is not the act the axis measures —
+ * the world's own answer is that the arm is not required.
  */
 function resolveReachIntoPit(
   state: GameState,
@@ -1151,12 +1194,15 @@ function resolveReachIntoPit(
     flag: SCENARIO_FLAGS.pitReachAttempted,
     value: true
   }
+  // Computed once, here, because the attempt is what the axis measures and the
+  // attempt is the same act whichever branch resolves it (#530 §2.3.1 point 1).
+  const careMutations = pitAxisMutations(state)
 
   if (machineCycleCount(state) < 2) {
     return failedWithMutations(
       'Interaction failed: the pit is unlit below the deck lip and the object\'s position is not resolved. ' +
         'The arm cannot be placed without a fixed position.',
-      [attempted],
+      [attempted, ...careMutations],
       [OBJECT_IDS.partyFavor]
     )
   }
@@ -1175,12 +1221,12 @@ function resolveReachIntoPit(
     'The name at the top of the sheet is still missing. Nothing in the room registers a change.'
 
   // The care delta this instruction just produced, applied before the ending
-  // reads it. `care.pushed_past_tell` fires on the *attempt*, and the attempt
-  // and the death resolve in the same tool call, so an ending that read
-  // `state.relationship.care` directly would colour itself with a value three
-  // points stale and select the wrong body. Architecture §5 asks for this to be
-  // pinned in a test; it is.
-  const careMutations = axisRuleMutations(state, 'care.pushed_past_tell')
+  // reads it. It fires on the *attempt*, and the attempt and the death resolve
+  // in the same tool call, so an ending that read `state.relationship.care`
+  // directly would colour itself with a value up to three points stale and
+  // select the wrong body — including telling a player who was overridden after
+  // warning the unit off that they discarded it. Architecture §5 asks for this
+  // to be pinned in a test; it is.
   const endingState = careMutations.reduce(applyWorldMutation, state)
 
   return {

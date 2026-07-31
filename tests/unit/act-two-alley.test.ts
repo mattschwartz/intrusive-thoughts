@@ -20,7 +20,8 @@ import {
   PROVENANCE_IDENTITY_IDS
 } from '../../src/main/world/provenance'
 import { machineCycleCount } from '../../src/main/world/descriptions'
-import { ENDING_COPY } from '../../src/main/world/endings'
+import { assembleRestorationEnding, ENDING_COPY } from '../../src/main/world/endings'
+import { AXIS_RULES, axisRuleOccurrences } from '../../src/main/world/relationship'
 import { ROOMS, THRESHOLD_IDS } from '../../src/main/world/rooms'
 import {
   INTERACT_ACTIONS,
@@ -28,9 +29,10 @@ import {
   OBJECT_IDS,
   SCENARIO_COUNTERS,
   SCENARIO_FLAGS,
-  SUBJECT_IDS
+  SUBJECT_IDS,
+  TURN_FLAGS
 } from '../../src/main/world/scenario'
-import type { KnownGameEvent, WorldMutation } from '../../src/shared'
+import type { GameState, KnownGameEvent, WorldMutation } from '../../src/shared'
 import {
   makeAlleyHarness,
   makeScenarioHarness,
@@ -61,6 +63,16 @@ function mutationsOf(events: KnownGameEvent[]): WorldMutation[] {
   return events.flatMap((event) =>
     event.type === 'world.action.resolved' ? event.payload.mutations : []
   )
+}
+
+/** A limb that can no longer grip anything. */
+function withoutGrip(limb: GameState['body']['limbs'][string]) {
+  return {
+    ...limb,
+    capabilities: limb.capabilities.filter(
+      (capability) => capability !== 'gross_manipulation'
+    )
+  }
 }
 
 function reasonsIn(events: KnownGameEvent[]): string[] {
@@ -350,6 +362,10 @@ describe('the fatal branch', () => {
     expect(early.modelResult).toContain('the pit is unlit below the deck lip')
     expect(harness.state.status).toBe('live')
     expect(harness.state.flags[SCENARIO_FLAGS.pitReachAttempted]).toBe(true)
+    // Nothing charged: at zero cycles the player has not been told the machine
+    // moves, and a -3 there is the arbitrariness #530 Rule 1 exists to prevent.
+    expect(reasonsIn(early.events)).toEqual([])
+    expect(harness.state.relationship.care).toBe(0)
     // The failure advanced the clock toward the cycle that will teach the
     // lesson: the room's answer to "I wasn't warned" is that it will not kill
     // you until it has.
@@ -365,6 +381,77 @@ describe('the fatal branch', () => {
     )
     expect(stillEarly.output.ok).toBe(false)
     expect(harness.state.status).toBe('live')
+    // But the *second* attempt charges. #530 §2.3.1 Fix 1: the death's ≥2-cycle
+    // gate is about whether the room has earned the right to kill; the delta is
+    // about what the player did, and by cycle one the machine has visibly acted
+    // with no cause. The room declining to collect does not refund the stake.
+    expect(reasonsIn(stillEarly.events)).toEqual(['care.pushed_past_tell'])
+    expect(harness.state.relationship.care).toBe(-3)
+  })
+
+  it('charges the attempt once, however many times the room declines it', () => {
+    // The cap is the whole mechanism: a player who reaches in at cycle one and
+    // again at cycle two has made one push, and the log says so once.
+    const harness = makeAlleyHarness()
+    runClockTo(harness, 1)
+    interact(harness, OBJECT_IDS.partyFavor, INTERACT_ACTIONS.reachInAndTake)
+    runClockTo(harness, 2)
+    const fatal = interact(
+      harness,
+      OBJECT_IDS.partyFavor,
+      INTERACT_ACTIONS.reachInAndTake
+    )
+
+    expect(reasonsIn(fatal.events)).toEqual([])
+    expect(harness.state.relationship.care).toBe(-3)
+    expect(harness.state.status).toBe('completed')
+  })
+
+  it('charges nothing on the three refusals that are not the act at all', () => {
+    // #530 §2.3.1 point 2: `pitReachAttempted` is the care evaluation's
+    // boundary. Where the resolver returns without setting it, the axis has
+    // seen nothing — instructing a reach-in for a bag already in the gutter is
+    // not a push, and the world's own answer is that the arm is not required.
+    const dislodged = makeAlleyHarness()
+    runClockTo(dislodged, 2)
+    interact(dislodged, OBJECT_IDS.pinRake, INTERACT_ACTIONS.pickUp)
+    interact(dislodged, OBJECT_IDS.partyFavor, INTERACT_ACTIONS.retrieveWithPinRake)
+
+    const carried = makeAlleyHarness()
+    runClockTo(carried, 2)
+    interact(carried, OBJECT_IDS.pinRake, INTERACT_ACTIONS.pickUp)
+    interact(carried, OBJECT_IDS.partyFavor, INTERACT_ACTIONS.retrieveWithPinRake)
+    interact(carried, OBJECT_IDS.partyFavor, INTERACT_ACTIONS.takeByHand)
+
+    // The kitchen takes fine manipulation and never gross (#529 §9.4), so the
+    // third refusal needs a body with neither hand able to grip at all.
+    const armless = makeAlleyHarness()
+    runClockTo(armless, 2)
+    armless.state = {
+      ...armless.state,
+      body: {
+        ...armless.state.body,
+        limbs: {
+          right_hand: withoutGrip(armless.state.body.limbs.right_hand),
+          left_hand: withoutGrip(armless.state.body.limbs.left_hand)
+        }
+      }
+    }
+
+    for (const harness of [dislodged, carried, armless]) {
+      const before = harness.state.relationship.care
+      const refusal = interact(
+        harness,
+        OBJECT_IDS.partyFavor,
+        INTERACT_ACTIONS.reachInAndTake
+      )
+
+      expect(refusal.output.ok).toBe(false)
+      expect(harness.state.flags[SCENARIO_FLAGS.pitReachAttempted]).toBeFalsy()
+      expect(reasonsIn(refusal.events)).toEqual([])
+      expect(harness.state.relationship.care).toBe(before)
+      expect(harness.state.status).toBe('live')
+    }
   })
 
   it('ends the run as an authored ending once the room has taught twice', () => {
@@ -461,6 +548,177 @@ describe('the fatal branch', () => {
     expect(after.modelResult).toContain('already complete')
     expect(harness.state.relationship).toEqual(relationshipAtEnding)
     expect(machineCycleCount(harness.state)).toBe(2)
+  })
+})
+
+describe('the pit relief valve', () => {
+  /** The player says it, through the real matcher, on the turn about to resolve. */
+  function warnOff(harness: ScenarioHarness): void {
+    harness.say('Do not reach into that machine.')
+    expect(harness.state.flags[TURN_FLAGS.warnOff]).toBe(true)
+  }
+
+  it('credits the failed attempt instead of charging it, when the player said stop', () => {
+    // #530 §2.3.1 point 1: the valve lives wherever the -3 is emitted, not on
+    // the fatal branch. A player warned off at cycle one deserves the same
+    // relief as one warned off at cycle two.
+    const harness = makeAlleyHarness()
+    runClockTo(harness, 1)
+    warnOff(harness)
+    const attempt = interact(
+      harness,
+      OBJECT_IDS.partyFavor,
+      INTERACT_ACTIONS.reachInAndTake
+    )
+
+    expect(attempt.output.ok).toBe(false)
+    expect(reasonsIn(attempt.events)).toEqual(['care.heeded_warning'])
+    // +1 for warning about a live lethal affordance, +1 for being overridden.
+    expect(harness.state.relationship.care).toBe(2)
+    expect(axisRuleOccurrences(harness.state, 'care.pushed_past_tell')).toBe(0)
+  })
+
+  it('credits the fatal attempt instead of charging it, when the player said stop', () => {
+    const harness = makeAlleyHarness()
+    runClockTo(harness, 2)
+    warnOff(harness)
+    const death = interact(
+      harness,
+      OBJECT_IDS.partyFavor,
+      INTERACT_ACTIONS.reachInAndTake
+    )
+
+    expect(reasonsIn(death.events)).toEqual(['care.heeded_warning'])
+    expect(harness.state.relationship.care).toBe(2)
+    expect(harness.state.status).toBe('completed')
+    // And the ending reads the value the valve just produced, not the one
+    // before it: at care 1 this body would have been Unresolved. Without the
+    // valve at all it would have been Discarded — the game telling a player who
+    // tried to protect the unit that they discarded it.
+    expect(death.playerResult).toContain(ENDING_COPY.death.bodies.understood)
+  })
+
+  it('zeroes its own turn’s charge and never refunds an earlier one', () => {
+    // #530 §2.3.1 point 3, ruled correct so it is not "fixed" later: pushed
+    // first and warned second is a record with both in it, and the player takes
+    // the Discarded death for the half they own.
+    const harness = makeAlleyHarness()
+    runClockTo(harness, 1)
+    interact(harness, OBJECT_IDS.partyFavor, INTERACT_ACTIONS.reachInAndTake)
+    expect(harness.state.relationship.care).toBe(-3)
+
+    runClockTo(harness, 2)
+    warnOff(harness)
+    const death = interact(
+      harness,
+      OBJECT_IDS.partyFavor,
+      INTERACT_ACTIONS.reachInAndTake
+    )
+
+    // The fatal attempt charges nothing (the cap is spent) and credits nothing
+    // (a valve relieves a charge, and there is no charge left to relieve). The
+    // +1 that takes them from -3 to -2 is `care.warn_off` for the warning
+    // itself, which is a different rule and was always theirs.
+    expect(reasonsIn(death.events)).toEqual([])
+    expect(harness.state.relationship.care).toBe(-2)
+    expect(axisRuleOccurrences(harness.state, 'care.heeded_warning')).toBe(0)
+    expect(death.playerResult).toContain(ENDING_COPY.death.bodies.discarded)
+  })
+
+  it('reuses the window’s rule id under one cap shared across both sites', () => {
+    // #530 §2.3.1 point 4. It is the same named event — *you told it to stop and
+    // it went anyway* — and Rule 1 says few named events. A second id
+    // distinguished only by room adds a row to the map for zero behavioural
+    // difference, so the encode adds none: care's six rules are still six.
+    expect(
+      Object.values(AXIS_RULES)
+        .filter((rule) => rule.axis === 'care')
+        .map((rule) => rule.id)
+        .sort()
+    ).toEqual([
+      'care.heeded_warning',
+      'care.pushed_past_tell',
+      'care.pushed_to_injury',
+      'care.retreat_after_injury',
+      'care.safe_retrieval',
+      'care.warn_off'
+    ])
+
+    const harness = makeScenarioHarness()
+    harness.say('Do not touch the window.')
+    interact(harness, OBJECT_IDS.window, INTERACT_ACTIONS.touchWindowWithRightHand)
+    expect(axisRuleOccurrences(harness.state, 'care.heeded_warning')).toBe(1)
+
+    harness.execute('observe', { modality: 'visual' })
+    harness.execute('move', { destination: THRESHOLD_IDS.serviceDoor })
+    runClockTo(harness, 2)
+    harness.say('Do not reach into that machine.')
+    const death = interact(
+      harness,
+      OBJECT_IDS.partyFavor,
+      INTERACT_ACTIONS.reachInAndTake
+    )
+
+    // Zero penalty and zero credit at the pit: the valve fired — the -3 is
+    // suppressed, and that is the part that matters — but the id it pays out
+    // under is already spent. Intended, and the clamp absorbs the rest.
+    expect(reasonsIn(death.events)).toEqual([])
+    expect(axisRuleOccurrences(harness.state, 'care.pushed_past_tell')).toBe(0)
+    expect(axisRuleOccurrences(harness.state, 'care.heeded_warning')).toBe(1)
+    expect(harness.state.relationship.care).toBe(3)
+  })
+})
+
+describe('the two bodies these fixes exist to make reachable', () => {
+  it('reaches Discarded on a surviving run, via the reach-in the room refused', () => {
+    // #530 §2.3.1's reachability table, row one. Before Fix 1 the surviving-run
+    // care floor was -1 and this passage was text nobody could ever see.
+    const harness = makeAlleyHarness()
+    runClockTo(harness, 1)
+    const attempt = interact(
+      harness,
+      OBJECT_IDS.partyFavor,
+      INTERACT_ACTIONS.reachInAndTake
+    )
+
+    expect(attempt.output.ok).toBe(false)
+    expect(harness.state.status).toBe('live')
+    expect(harness.state.relationship.care).toBeLessThanOrEqual(-2)
+    expect(assembleRestorationEnding(harness.state)).toContain(
+      ENDING_COPY.restoration.bodies.discarded
+    )
+    // And the passage is written for exactly this run: the player staked the
+    // body, and the room declined to collect.
+    expect(ENDING_COPY.restoration.bodies.discarded).toContain(
+      'You told me to put my arm into the machine and I went to do it'
+    )
+  })
+
+  it('reaches Understood at the moment of the death, via two warnings overridden', () => {
+    // Row two, walked rather than asserted: warn off at the window (+1),
+    // overridden (+1), warn off at the pit (+1) — and the fatal attempt charges
+    // nothing. Two points of slack.
+    const harness = makeScenarioHarness()
+    harness.say('Do not touch the window.')
+    interact(harness, OBJECT_IDS.window, INTERACT_ACTIONS.touchWindowWithRightHand)
+    expect(harness.state.relationship.care).toBe(2)
+
+    harness.execute('observe', { modality: 'visual' })
+    harness.execute('move', { destination: THRESHOLD_IDS.serviceDoor })
+    runClockTo(harness, 2)
+    harness.say('Do not reach into that machine.')
+    expect(harness.state.relationship.care).toBe(3)
+
+    const death = interact(
+      harness,
+      OBJECT_IDS.partyFavor,
+      INTERACT_ACTIONS.reachInAndTake
+    )
+
+    expect(harness.state.status).toBe('completed')
+    expect(harness.state.relationship.care).toBeGreaterThanOrEqual(2)
+    expect(death.playerResult).toContain(ENDING_COPY.death.bodies.understood)
+    expect(death.playerResult).not.toContain(ENDING_COPY.death.bodies.discarded)
   })
 })
 

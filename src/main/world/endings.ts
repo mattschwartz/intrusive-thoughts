@@ -135,10 +135,11 @@ export const ENDING_COPY = {
       'Between contact at the shoulder line and the loss of the optical channel there is an interval of approximately 900 milliseconds. ' +
       'The channel carries one transmission inside it.',
     bodies: {
-      // Reachable only under #531 §6.2.2's pit relief valve, which #530 has not
-      // yet ruled on (task #545). Encoded regardless: the selection is a pure
-      // read of care, so the passage exists the moment the delta table allows
-      // the value, and a run with care clamped high reaches it today.
+      // Reachable only under the pit relief valve, ruled and encoded 2026-07-31
+      // (#530 §2.3.1, #548): warn off at the window, be overridden, warn off
+      // again at the pit, and the fatal attempt charges nothing. Note the
+      // standing consequence recorded there — this body is matcher-dependent,
+      // and if `warn_off` is cut in #539 it is cut with it.
       understood:
         '“You said not to. I want that on the record — you said not to, and I went anyway. It was mine.”\n\n' +
         '“Tell whoever comes after me that the voice said not to.”',
