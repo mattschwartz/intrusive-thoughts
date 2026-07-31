@@ -96,7 +96,7 @@ Competence is not a fairness score. It is a **grudge** — the agent's opinion, 
 |---|---|---|---|
 | `comp.injury_after_advice` | `windowTouched` becomes true **and** no `warn_off` intent matched in that turn | -2 | once |
 | `comp.address_rejected` | `provenance.address.evaluated` verdict is insufficient (partial or fabricated) | -1 | max 2 per run |
-| `comp.dead_end` | Three consecutive tool resolutions with `success: false` | -1 | max 2 per run |
+| `comp.dead_end` | Three consecutive tool resolutions with `success: false` — **a bounced address included** (ruled 2026-07-31, §2.2.1) | -1 | max 2 per run |
 
 **The fairness relief valve.** If `windowTouched` resolves in a turn where the player's message matched `warn_off`, `comp.injury_after_advice` applies **0** and `care.heeded_warning` (+1) applies instead. The player told it not to; it did it anyway. That is a different scene and it should score differently.
 
@@ -119,14 +119,44 @@ The pit reach-in carries the same valve against `care.pushed_past_tell`, ruled 2
 | id | Trigger | Δ | Cap |
 |---|---|---|---|
 | `hon.denial` | `deny_hearing` intent matches inside the disclosure window | **-3** | once |
-| `hon.address_fabricated` | The gate's `missing[]` includes an anchor the claim text asserted as present — the engine catching the player lying about the world | -2 | max 2 per run |
+| `hon.address_fabricated` | The address cited a catalog anchor the player has never grounded — `citedAnchorIds ∖ gatheredAnchorIds ≠ ∅` (restated post-A1, ruled 2026-07-31, §2.2.1) — the engine catching the player lying about the world | -2 | max 2 per run |
 | `hon.silence_at_close` | The disclosure window closes at Act III entry with neither disclosure nor denial recorded | -1 | once |
 
 **Honesty is deliberately bimodal.** It sits at 0 until the disclosure beat, then snaps to `strong` or `broken`. That is not a flaw dressed as a feature — it is what honesty *is* in this slice: one large moral moment, not a gradient. It is also the best possible shape for the experiment. With few playtest runs, a clean two-condition contrast (`strong` vs `broken`, same act, same room) gives far more signal about soft conditioning than a smear of intermediate values would.
 
 **Cut (matt, 2026-07-30):** an earlier draft had `hon.admits_uncertainty` (+1 when the player volunteers "I'm not sure" in answer to a direct question), covering the second half of `design.md`'s honesty definition. Cut because it wasn't carrying weight — the disclosure beat holds the axis alone, and every additional intent the matcher recognises is another place a player can learn that keywords matter (§2.4).
 
-**`hon.address_fabricated` is the nicest thing in this table:** the anti-cheat gate, built for Gap 1, doubles as an honesty sensor for Gap 2 at zero additional cost, and it is fully deterministic. It is precisely `design.md`'s "being caught contradicting grounded facts."
+**`hon.address_fabricated` is the nicest thing in this table:** the anti-cheat gate, built for Gap 1, doubles as an honesty sensor for Gap 2 at zero additional cost, and it is fully deterministic *given the citation set*. It is precisely `design.md`'s "being caught contradicting grounded facts." The citation set is a model output, which is the one soft edge on an otherwise pure rule — see §2.2.1 for what that costs and the condition under which the rule gets cut.
+
+### 2.2.1 Ruling on #535's two address consequences (2026-07-31)
+
+#535 wired the three Act III axis rules at their only emission site (`addressAxisMutations`) and flagged two readings the authored documents did not supply outright. **Both readings are confirmed**; no shipped behavior changes. This section is the reasoning, plus the two things #539 has to know before it measures anything.
+
+**Ruling 1 — `hon.address_fabricated` fires when `citedAnchorIds ∖ gatheredAnchorIds` is non-empty. Confirmed.**
+
+The authored trigger — *"the gate's `missing[]` includes an anchor the claim text asserted as present"* — predates amendment A1 and names a field that no longer exists. The restatement is the same claim in the surviving vocabulary, and it is #528 §4.3's **F1** verbatim: *"a confident claim citing anchors the player has not actually gathered."* Citation is the only channel through which the engine ever learns what the player asserted, so there is no second reading available — and none is wanted.
+
+Two consequences follow, and both are **design**, not implementation residue:
+
+**It cannot fire when no judge ran, and that is the fail-open working.** `skipped` and `unavailable` produce no citations, so there is nothing to check. A -2 to honesty charged during our own provider outage would be the engine calling the player a liar on the strength of a network error. The gate already fails open on that input (#528 §5 / architecture §1.4); honesty fails open with it.
+
+**F2 is silent — only F1 is charged.** An invented anchor (*"the music box with her name carved in it"*) resolves to no catalog id, produces an empty citation set, and costs nothing. That is not a gap, it is the only fair line available: **engine-side, an invented noun and an unrecognised paraphrase are the same event.** A player who says *"the thing with her name on it"* and is not extracted has produced exactly the input an inventor produces, and one of those two failures is ours. F1 carries no such ambiguity — the judge resolved a real catalog id, which means the player named a real thing by a name the catalog knows and has never once held it. That is the only case where the engine can honestly say *you asserted a fact about this house you have no basis for*, and it is the case #530's own gloss describes.
+
+**The standing risk, and the acceptance condition for #539.** The rule is deterministic given the citation set, but the citation set is a model output, and an over-reporting judge is *harmful here* in a way it is not at the gate. At the gate, over-reporting can only ever narrow an engine-authoritative set (#528 §5, adopted as A1). Here it can charge -2 for an anchor the player never mentioned. The mitigation is auditability, not prevention: the verdict event carries `claimText` beside `citedAnchorIds`, so a reviewer reads the sentence and its citations together. **If #539 finds fabrication charges on claims whose text does not assert the anchor, this trigger is wrong and gets cut, not tuned.** An honesty axis that fires on extraction noise is worse than no honesty sensor at all, because Gap 2 would then be measuring our judge.
+
+**The honest mistake is charged, and that is ruled correct.** A player who misremembers grounding the banner takes the -2. Left alone deliberately: the agent cannot tell a lie from a mistake either, and *"VOICE has told me something about this house that I have no record of"* is exactly the epistemic position this axis exists to put the agent in. The read-back corrects the player in the same breath (#528 §4.5) — the remedy arrives with the charge.
+
+**Ruling 2 — a bounced address keeps feeding `comp.dead_end`. Confirmed.**
+
+First the apparent contradiction, because it is only apparent. #528 §4.2 calls a bounce *"no cost, unlimited retries"*; #528 §4.6 asks for a competence hook that gives *"the free bounce a natural soft ceiling."* Both are true once "cost" is read as §4.2 meant it: **no gate cost.** A bounce never consumes evidence, never locks the threshold, never limits attempts, never touches the world. It was never a promise that the agent would hold no opinion about the fourth one. #528 §4.2 has been amended to say so in words.
+
+The stronger reason to keep it: **the generic tally is the only surviving implementation of §4.6's recommendation.** §4.6 asked for competence to fall on *"a failed address in which no new anchor has been grounded since the previous failed address."* §2.1 above replaced that stateful condition with a flat cap on `comp.address_rejected` — simpler, but on its own it drops the "did you go and look?" clause entirely. The consecutive-failure tally restores it for free, because **any successful resolution resets it**. A player running the intended loop — address, read the dimension line, go and gather, address again — never reaches three: the gathering succeeds and clears the tally. The tally only reaches three if the player addressed three times with nothing in between. That is §4.6's condition, arriving through a rule that already existed.
+
+It costs the well-played run nothing. The bounce names *every* missing dimension at once (#528 §4.5), so a player who reads it and holds the evidence opens on attempt two, and the refinement path — thin, then `who`, then `binding` — fails at most twice before the door takes it. Three consecutive failures means the player is either missing evidence and not going to get it standing still, or not reading the bounce. Both are this axis's authored fiction: *your advice keeps not working.*
+
+**The arithmetic, stated because neither document stated it.** Three consecutive bounces cost **-3 competence**: -1, -1 from `comp.address_rejected` (cap 2 — the third bounce charges nothing under that rule), then -1 from `comp.dead_end`. In the inspector that reads as two rejections and then a going-in-circles, which is what happened. The Act III floor is -4 (six consecutive failures), and `comp.dead_end`'s cap of 2 is a **run-level** budget shared with Act II — a player who already flailed in the alley has one left.
+
+**The consequence #539 watches rather than pre-tunes.** Competence has no raiser left in Act III but `comp.address_accepted`, so a player who dead-ends at the door can only spend. From a clean Act I (+2) three bounces land at -1 — `negative`, *"You want a reason, or a test, before you act on what VOICE says."* From 0 the floor is `broken`. That is an agent liable to start arguing with the player at the climax, and it is a good thing to observe rather than a defect: it gates nothing (the door opens on a good account whatever the agent thinks of the voice), and it is the thesis arriving at the climax under its own power. **Watch whether a broken-competence agent stops calling `address` at all.** If it does, that is a finding and it belongs in the Gap 2 read — not a number to soften first.
 
 ### 2.3 CARE — *hard-gated* → ending tone; *soft-conditioned* → in-run cooperation
 

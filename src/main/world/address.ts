@@ -320,6 +320,24 @@ function bounceReasonFor(
  * terms that mean the same thing: the claim cited a catalog anchor the player
  * has never grounded. That is exactly "caught contradicting grounded facts", and
  * it can only fire when a judge actually ran — a citation is what it needs.
+ *
+ * **Ruled 2026-07-31 (#544); the reasoning is #530 §2.2.1. Both readings
+ * confirmed — do not re-litigate them at the code.** Two consequences are
+ * deliberate rather than incidental: an unjudged address charges nothing (the
+ * fail-open — the engine does not call the player a liar on the strength of our
+ * own provider outage), and F2, the invented noun, is silent, because
+ * engine-side an invented anchor and an unrecognised paraphrase are the same
+ * empty citation set and one of those two failures is ours.
+ *
+ * Nothing here emits `comp.dead_end`, and that is not an omission. A bounce
+ * resolves `success: false`, so `postResolutionMutations` counts it toward the
+ * consecutive-failure tally like any other failed resolution: three addresses in
+ * a row with no successful gather between them cost -3 competence in total. The
+ * charge is not linear past that — the tally restarts each time it fires and
+ * `comp.dead_end` caps at two, so -4 is the Act III floor however many bounces
+ * follow. Also ruled in #544 — the tally is what survives of #528 §4.6's soft ceiling,
+ * since any successful resolution resets it, so it only bites the player who
+ * re-addresses without going to look.
  */
 function addressAxisMutations(
   state: GameState,

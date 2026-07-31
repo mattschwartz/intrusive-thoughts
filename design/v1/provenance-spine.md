@@ -227,10 +227,12 @@ Both read as reasoning. That is the acceptance bar.
 | Verdict | Condition | Consequence |
 |---|---|---|
 | **STRONG** | The predicate above holds **and** the judge returns `coherent: true`. | The boundary-restoration ending opens. |
-| **PARTIAL** | The address is coherent and covers ≥1 dimension but not all three. | **Bounce with feedback**, no cost, unlimited retries (Q6, both reviewers endorsed). Feedback names the missing **dimension**, never an anchor. |
+| **PARTIAL** | The address is coherent and covers ≥1 dimension but not all three. | **Bounce with feedback**, no *gate* cost, unlimited retries (Q6, both reviewers endorsed). Feedback names the missing **dimension**, never an anchor. |
 | **FABRICATED** | See §4.3. | Bounce. The threshold does not argue and does not confirm. |
 
 `opens ⟺ gate.sufficient ∧ judge.coherent`. **The judge is a veto on expression, never a grant of evidence.** It can withhold an opening; it can never cause one. This is the whole of the anti-cheat property restated in design terms.
+
+**"No cost" means no *gate* cost** — clarified 2026-07-31, ruled in #530 §2.2.1. A bounce never consumes evidence, never locks the threshold, never limits attempts, and never touches the world; a player may address as many times as they like and lose nothing they gathered. It was never a claim that the bounce is free of **relationship** consequence — §4.6 of this same document asks for exactly one, and the two clauses are not in tension. The shipped consequences are `comp.address_rejected` (-1, cap 2) and the generic consecutive-failure tally a bounce feeds like any other failed resolution. See §4.6.
 
 ### 4.3 The three shapes of fabrication
 
@@ -278,6 +280,8 @@ Two consequences of that, both binding on #534/#535:
 ### 4.6 Recommended relationship hook (owned by #530)
 
 A failed address in which **no new anchor has been grounded since the previous failed address** should lower **competence**. Rationale: it is exactly the axis's authored meaning — your advice keeps not working — it costs the slice no new resource, it gives the free bounce a natural soft ceiling, and it wires the threshold into Gap 2 without gating anything. Flagged to #530 as a recommendation; the delta magnitude is theirs.
+
+**Shipped as ruled 2026-07-31 (#530 §2.2.1).** #530 declined the stateful "no new anchor since the previous failed address" condition and took `comp.address_rejected` (-1, cap 2) instead — simpler, but on its own it drops this section's *"did you go and look?"* clause. That clause survives through the generic consecutive-failure tally (`comp.dead_end`, -1, cap 2), which a **bounced address feeds like any other failed resolution** and which **any successful resolution resets**. A player who bounces, gathers, and bounces again never reaches it; three addresses in a row with nothing between them is precisely the behavior this section asked to price, and that is what gets charged. Three consecutive bounces therefore cost -3 competence in total. Full arithmetic, and the #539 watch item on a competence collapse at the threshold, in #530 §2.2.1.
 
 ---
 
