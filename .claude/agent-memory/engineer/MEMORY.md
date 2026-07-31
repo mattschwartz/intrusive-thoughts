@@ -7,3 +7,4 @@
 - [The provenance judge as built](project_provenance-judge.md) — #535's judge boundary and verdict event, the address test seam, and what #536/#537 inherit.
 - [Acts I–II as built](project_acts-i-ii.md) — #536's ambient clock shape, the death contract's ordering, and the content collisions it re-cut.
 - [Act III as built](project_act-iii.md) — #537's ending-copy home, the two load-bearing orderings, and the three changes it made outside its own content.
+- [The 'ended' controller status](project_ended-status.md) — #543's terminal-status rule, the act-in engine seam for controller tests, and the open presentation hand-off.
