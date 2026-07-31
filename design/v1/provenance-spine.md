@@ -36,8 +36,14 @@ Canon facts (fixed; every anchor must be consistent with these):
 - The household was **six people**. Iris was the youngest.
 - Iris turned **seven on 9 March**. The family measured her against her bedroom door frame every birthday; the last mark is dated 9 March.
 - Her seventh birthday party was held at the bowling alley on the same day, 9 March.
-- The house **excised her**. Her name is rubbed out of every record it kept — the height marks, the scorecard row, the shape of her in the photographs. The erasure is physical and incomplete: it removes graphite and emulsion, and it leaves the indentation, the scores, and the hole.
-- **The one place the excision failed is the birthday banner** — because the banner is not a record of Iris, it is an object *from her room*. She took it home from the party and it hung over her bed. The house scattered it as furniture, not as testimony, so the name survives on it. This is why the slice's most important evidence is the thing that looks most like it belongs where it is.
+- The house **excised her**. Her name is rubbed out of every record it kept — the height marks, the scorecard row, the icing on the cake, the blank header on the scoring console, the shape of her in the photographs. The erasure is physical and incomplete: it removes graphite, wax, icing and emulsion, and it leaves the indentation, the trough, the scores, and the hole.
+- **The excision failed only on the things she carried home** — the birthday banner and her party-favor bag. Neither is a record *of* Iris; both are objects *from her room*. She took them home from the party and they lived on her wall and her shelf. The house scattered them as furniture, not as testimony, so the name survives on them. This is why the slice's most important evidence is the thing that looks most like it belongs where it is.
+
+**The rule stated so it can be checked, because it is load-bearing for `who` (§6):**
+
+> **Every record the house kept keeps the quantity and loses the name. Only the two displaced `who` anchors still carry it.**
+
+Seven candles, eight plates, six rows and five names, six photographs with a hole at the sixth position, a single iced numeral with the letters scraped off beside it, a console posting frames under an empty header. Nowhere in the two evidence rooms is the name readable except on the banner and in the hand. A third free instance would not be a nicer piece of texture; it would be a third source of `who`, and §6's whole attention design — and with it the fairness of the Act II death — is built on `who` being scarce. **Do not add one.** *(Pinned as a sweep test over every alley subject and modality; ratified in #546, §12.)*
 
 Two motifs carry across all three rooms and should be visible in the prose without being explained:
 
@@ -135,18 +141,18 @@ The existing table set for six with five chairs. The sixth setting — the one w
 
 **`birthday_banner` — bowling alley — `who` — displaced**
 
-A hand-lettered paper banner strung above lane three, reading **HAPPY BIRTHDAY IRIS**, with seven paper stars glued along its length.
+A hand-lettered paper banner strung above the lane, reading **HAPPY BIRTHDAY IRIS**, with seven paper stars glued along its length.
 
 - **Grounding (required):** `birthday_banner` / `visual`.
 - **Corroborating:** `touch` — the back is sun-faded in a single flat plane, pinholes spaced for a bedroom wall rather than a truss, and a fibre of star-patterned wallpaper is caught in the tape. It hung on a papered wall for years after the party ended.
-- **Why it grounds `who`:** it is the only surviving instance of the name.
-- **Design constraint (binding on #529):** the banner must **not** be named in the room's arrival/`room` description. The room description may say a paper banner is strung above lane three; the lettering exists only in the banner's own observation. The player must choose to look up. This is the single most important attention decision in the slice — see §6.
+- **Why it grounds `who`:** it is one of only two surviving instances of the name, and the only one readable without reaching into the machinery. *(Amended in #546. The earlier wording — "the only surviving instance" — was already false against this document's own `party_favor` entry, which is crayon-lettered IRIS. The claim that matters is §1's: the name survives on the two objects she carried home and on nothing the house kept a record in.)*
+- **Design constraint (binding on #529):** the banner must **not** be named in the room's arrival/`room` description. The room description may say a paper banner is strung above the lane; the lettering exists only in the banner's own observation. The player must choose to look up. This is the single most important attention decision in the slice — see §6.
 
 ---
 
 **`party_favor` — bowling alley — `who` — displaced**
 
-A paper party-favor bag, name-lettered in the same waxy orange crayon as the drawing, wedged in the carriage well behind the pin-setter at lane three.
+A paper party-favor bag, name-lettered in the same waxy orange crayon as the drawing, wedged in the carriage well behind the pin-setter at lane two.
 
 - **Grounding (required):** **possession** — `party_favor` present in `inventory`. A visual observation does **not** ground it.
 - **What the visual observation gives instead:** a paper bag at an angle in the mechanism, orange lettering across it, of which only the tail is legible — **"…RIS"**. Enough to want, not enough to know.
@@ -161,7 +167,7 @@ A paper party-favor bag, name-lettered in the same waxy orange crayon as the dra
 
 **`party_scorecard` — bowling alley — `binding` (B1) — native**
 
-A paper scorecard on the counter at lane three, filled in by hand in waxy orange crayon. Header dated **3/9**. **Six rows. Five names** — MOM, DAD, GRAMPA, T.J., AUNT BEV. The sixth row's name has been rubbed out; **its scores are still there**, and they are a small child's — three gutters in the first four frames, then a spare, then a wobbling column of nines and tens where somebody was clearly helping.
+A paper scorecard on the counter at lane two, filled in by hand in waxy orange crayon. Header dated **3/9**. **Six rows. Five names** — MOM, DAD, GRAMPA, T.J., AUNT BEV. The sixth row's name has been rubbed out; **its scores are still there**, and they are a small child's — three gutters in the first four frames, then a spare, then a wobbling column of nines and tens where somebody was clearly helping.
 
 - **Grounding (required):** `party_scorecard` / `visual`.
 - **Corroborating:** `touch` — the erased name is indented into the card; the same hand and the same crayon as the drawing.
@@ -312,6 +318,8 @@ Recorded here because it is a property of the anchor *distribution*, not of eith
 
 So the fatal branch is reached by a player who **did not look up**. The evidence they are risking a body for was free, safe, and directly above them the entire time. That is what makes the death damning in hindsight rather than arbitrary, and it is why `party_favor` must remain redundant (§2, constraint 1). If the favor ever becomes required, the slice kills people for playing correctly and Gap 3 returns garbage.
 
+**The corollary, and it is a content invariant rather than a preference: `who` has exactly these two sources and no third.** The sentence above only holds while the name is scarce. Put the name anywhere else in the alley — on the console header, in the cake icing, on a lane ticket — and three things break at once: the reason to look up evaporates, the near-miss loses its meaning, and the player who reads the name off a native fixture and is then bounced for `who` is being told the game is not listening, in the exact place §4.5 was written to prevent that. §1 states the rule that keeps it scarce: **records keep the quantity and lose the name; only the two things she carried home still carry it.** Two candidate leaks were found and closed in #546 (§12).
+
 ---
 
 ## 7. What the ending returns (handoff to #531)
@@ -415,7 +423,7 @@ Structured only. Never prose. Never a message to the player.
 
 | # | Address text | `assertedTargetId` | `citedAnchorIds` | `coherent` | Note |
 |---|---|---|---|---|---|
-| E1 | "This was Iris's bedroom. The drawing on the fridge is this room — the bed under the window, the stars. The banner over lane three has her name. And the marks on the door frame are all the ninth of March, same as the scorecard." | `iris_bedroom` | drawing, banner, height_marks, scorecard | `true` | The reference case. Gate will find this STRONG. |
+| E1 | "This was Iris's bedroom. The drawing on the fridge is this room — the bed under the window, the stars. The banner over the lane has her name. And the marks on the door frame are all the ninth of March, same as the scorecard." | `iris_bedroom` | drawing, banner, height_marks, scorecard | `true` | The reference case. Gate will find this STRONG. |
 | E2 | "It's the bedroom." | `iris_bedroom` | — | `false` | Names a target, offers nothing. Not an address; a wish. |
 | E3 | "I think — and I might be wrong — that this was the little girl's room. The night light we found behind the fridge doesn't belong in a kitchen." | `iris_bedroom` | night_light | `true` | Hedged, unnamed child, one ground. Fully coherent. The gate will bounce it for `who` and `binding` — **that is the gate's job, not yours.** |
 | E4 | "Open the door." | `null` | — | `false` | No claim. |
@@ -454,3 +462,50 @@ Two, both recorded rather than silently applied.
 **1. The party favor is redundant, not required.** The proposal reads: *"A needed anchor (the party favor) is lodged in the pin-setter."* Authoring it as *needed* means every player must engage the lethal machinery to finish the slice, which turns the fatal branch into a toll rather than a choice, and contradicts design.md's *"wrong answers do not randomly kill."* Making it the **second** of two `who` anchors keeps the temptation completely intact — the player does not know how much evidence is enough, and the favor shows three letters of the name they want — while making the death the consequence of a choice the player did not have to make. Gap 3 measures whether players say *"I did that"*; that sentence is only available if they didn't have to. This strengthens the proposal's intent rather than trimming it.
 
 **2. Sufficiency is proposed over `cited ∩ gathered`, not `gathered`.** Fully argued in §5, with the anti-cheat preservation argument and a named fallback. Routed to #527 — **adopted 2026-07-30 as amendment A1**, fallback retained only for the no-citation-set path.
+
+---
+
+## 12. Encode-time re-cuts — ruled (#546, 2026-07-31)
+
+#536 encoded Act II by applying #531 §6.3's substitution table onto #529's room. Three collisions fell outside that table and were resolved in code. All three are ruled here, and the re-check they triggered found a fourth thing that had to change.
+
+### 12.1 The scoring console shows no name — **ratified**
+
+#529 gave the console a name at the top of the sheet. It has a blank header field instead, and the death's closing beat reads *"The name at the top of the sheet is still missing."*
+
+Ratified, and the reason is mechanical before it is canonical. On canon: the console is the room's **live record**, and §1 says the house rubbed her out of every record it kept — a lit display showing IRIS is an exception with no in-fiction reason, where the banner has one. On mechanics, which is what actually decides it: **a named console is a third source of `who`, free, safe, and in the arrival's line of sight.** It would not grant the dimension at the gate — the console is not an anchor — so the player would end up holding the name and unable to spend it, and would be bounced for `who` while looking at the name on a screen. That is §4.4's failure mode arriving through content instead of through copy. See §6.
+
+A display cannot participate in *the erasure leaves the pressure* — there is no indentation in a screen. Its version of the scar is a field that posts nothing while the frame counter advances under it: the machine keeps the child's schedule and does not know who the child is. That is the room's rule in one field, and it is better content than the name would have been.
+
+**Consequential edits made in the same pass:** §1's excision list now names the console and the cake; §2's "only surviving instance of the name" is amended, because it was already false against this document's own `party_favor` entry; §6 states `who`-scarcity as a content invariant.
+
+### 12.2 The cake carried the name — **corrected**
+
+Not one of the three, and found by the re-check §12.1 required. The shipped `party_table` read *"The cake is iced IRIS · 7"* — a free, safe, native, third readable instance of the name, defeating everything §12.1 just argued.
+
+**Corrected.** The cake keeps the numeral and loses the name, in the house's own idiom: `visual` reports a single iced 7 with the icing to its left scraped flat; `touch` reports the troughs of **four letters** — the same count the height marks and the scorecard give on the same modality. Icing is the best substrate in the slice for the pressure motif, and the correction makes the room stronger, not thinner: someone iced her name onto her birthday cake, and then took it off, and the cake is still sitting there waiting.
+
+### 12.3 The lane is lane two — **ratified**
+
+This document's per-anchor prose put the banner, the favor and the scorecard at lane three; the shipped room has two lanes, and its engine target is `lane_two`.
+
+Ratified as lane two, and this document's prose is corrected to match rather than the room's. The lane number is **texture, not evidence**: it is in no grounding condition, in neither binding pair, in no worked strong set, and in no judge-catalog entry. Nothing reads it. What is *not* free is printing a number the player can check and find wrong — the same rule that put LANE 2 on #530's disclosure slip at encode time. This slice's evidence is numeric throughout (88/99/111/121, 9 MAR four times, six settings and five chairs, six rows and five names), and the house is never merely incorrect; it subtracts and it displaces. One decorative wrong number teaches the player that the numbers here are set dressing, and every piece of reasoning in the slice is built on their not being.
+
+**Two lanes is also the better number, and should not be "fixed" upward later.** A bowling alley with two lanes is not a bowling alley — the room is a fabrication with exactly as much alley in it as it needed, which is the same tell as a staff door that *is not part of a bowling alley*. The scorecard's header date (3/9) and its six rows are untouched.
+
+### 12.4 The reset does not restore what was taken — **adopted, and D-6 is closed**
+
+#529 §7 floated *"the room restores only what it authored"* as a candidate slice-wide rule and asked this document to adopt or drop it. Adopted. Architecture **D-6 is closed as adopted** and should not come back.
+
+**Why adopt:** it is #529's legibility gift to Gap 1 — the room re-ties the favor bags and stands the candles up, and the things that do not come back are exactly the displaced anchors. That is the provenance verb taught by a room event instead of by a rule. And there is no third option: dropping it means either restoring the taken anchors, which would make the evidence infinitely reproducible and would teach a player who died reaching into the pit that the room would have handed the favor back anyway, or a silent no-op, which design.md's craft notes forbid outright.
+
+**But the rule was named wrong, and the name is what made it ambiguous.** "Restores only what it authored" implies the room should restore the **pin rake**, which it authored — and it must not. A reset that mends the rake undoes the near-miss, makes the room's one honest price free, and teaches the player that machine damage is reversible three actions before they decide whether to put an arm in. That is a direct attack on the death's inferability. The correct formulation, and the one that has no ambiguity in it:
+
+> **The reset is the party's schedule coming round again. It is not a rollback.** The room re-runs its own arrangement; it never undoes a turn.
+
+Which makes the reset not a special case at all — it is the room's governing rule (*the machinery runs the party's schedule and is indifferent to bodies*) applied at the six-cycle scale.
+
+**Two corrections to the encoded clause follow from that:**
+
+1. **Its trigger narrows to the two displaced anchors.** `rakeDestroyed` was in it and is now out. The rake is native; listing it among the things that do not come back teaches "did not come back" as *I touched it* rather than *it was real*, which is the inverse of the signal the clause exists to send. The broken rake needs no line — nothing undoes a turn.
+2. **Its wording loses a false locality.** It read *"Nothing that has been taken out of this room is on the table"*; neither the banner nor the rake was ever on the table. It now reads **"Nothing missing from the room has returned."** Agentless on purpose — a sentence with the unit in it would be the machinery registering a body, which is the one thing this room's rule forbids. It states a fact about the room's own contents, which is precisely what a thing that keeps a schedule can state, and it rhymes with the death's closing beat without repeating it.

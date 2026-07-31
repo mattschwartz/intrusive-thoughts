@@ -1641,11 +1641,21 @@ Default specified in §2.7: `observe` / `move` / `interact` / `address` advance 
 `record_note` / `private_reflection` do not, failed resolutions do. #529's
 walkthrough is consistent with this. Confirm or correct; it is one constant.
 
-### D-6 — #529's "the room restores only what it authored" rule. (→ game-designer, #528)
+### D-6 — #529's "the room restores only what it authored" rule. (→ game-designer, #528) — **CLOSED: adopted, 2026-07-31 (#546)**
 
 Raised as #529 open question 4. Structurally it is free either way — a description
 branch keyed on which objects have been taken. It should be slice-wide or absent,
 not a one-room quirk; that is a content-consistency call, not mine.
+
+**Answered by the game-designer in #528 §12.4 and #529 §7. Adopted slice-wide, and
+re-formulated in the adopting:** *the reset is the party's schedule coming round
+again, not a rollback — the room re-runs its own arrangement and never undoes a
+turn.* The old phrasing implied the room should restore the pin rake, which it
+authored and which must stay broken. The description branch you priced is the
+shipped one; its trigger narrowed to the two **displaced** anchors only (a native
+object in the un-restored set inverts the signal the clause exists to send), and
+its wording lost a false locality. No structural consequence either way; recording
+the answer here so the question does not return a third time.
 
 ---
 

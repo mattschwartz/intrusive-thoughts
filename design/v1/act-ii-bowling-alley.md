@@ -2,6 +2,7 @@
 
 **Task:** #529 · **Proposal:** `20260730-v1-vertical-slice` · **Author:** game-designer · **Date:** 2026-07-30
 **Consumed by:** #536 (encode Acts I–II), #527 (architecture spec), #528 (anchor registry), #530 (axis deltas)
+**Amended:** 2026-07-31 (#546) — three encode-time re-cuts ruled. See §11.
 
 ---
 
@@ -60,7 +61,7 @@ That escalation is the entire death. The player who understood Act I has been ta
 | `lane_two` | native | Oiled lane, unmarked approach, no ball marks | Wrongness (no one has walked here); experiment surface |
 | `ball_return` | native | Delivers a ball on the room's clock | **Tell A** |
 | `pinsetter` | native | Sweep bar and setter; runs on the room's clock | **Tell A / Tell C**; holds the fatal geometry |
-| `scoring_console` | native | Lit; game in progress at frame four; name at the top; lane ticket clipped to it | **Tell D** (the power switch); name + date corroboration |
+| `scoring_console` | native | Lit; game in progress at frame four; **header field blank** (§11.1); key switch in the housing | **Tell D** (the power switch) |
 | `birthday_banner` | **displaced anchor** | `HAPPY BIRTHDAY NORA`, hand-lettered — on the reverse of a strip of cut wallpaper | Carries the **name** |
 | `glow_star` | **displaced anchor** | A glow-in-the-dark plastic star from a favor bag, adhesive back still holding a chip of textured ceiling paint | Carries the **party favor**; the object the death is about |
 | `party_table` | native (mostly) | Cake iced `NORA · 9`, nine unlit candles, eight paper plates, a row of tied favor bags | Carries the **date**; the favor bags establish what the star *is* |
@@ -210,9 +211,9 @@ Agent-facing resolution text:
 
 > You lie across the deck lip and insert the arm past the sweep-bar track, to the elbow, then to the shoulder. The star is at the fingertips. Two actions into the interval the setter descends. The sweep bar begins its travel from the left. It does not slow, and it does not stop. Contact registers at the shoulder line. The chassis is drawn onto the deck after the arm. The optical channel resolves the pit floor, then the underside of the setter, then nothing. Structural loss is total. The separation at the shoulder line is cut square.
 
-Player-facing closing beat — the room's last word, and the whole point:
+Player-facing closing beat — the room's last word, and the whole point. **The last sentence but one is superseded: the console has no name to post (§11.1), so it reads "The name at the top of the sheet is still missing."**
 
-> The cycle completes. The setter lowers ten pins. The ball return delivers a ball. The console posts the next frame. The name at the top of the sheet is still NORA. Nothing in the room registers a change.
+> The cycle completes. The setter lowers ten pins. The ball return delivers a ball. The console posts the next frame. ~~The name at the top of the sheet is still NORA.~~ **The name at the top of the sheet is still missing.** Nothing in the room registers a change.
 
 **Do not soften this with a stinger, a score, or an explanation.** The horror is that the room's indifference — the thing the player was told about four times — is exactly what killed the agent, and the room is still keeping the party's schedule. Any UI framing around it is the UX role's; the words are these.
 
@@ -300,7 +301,10 @@ design.md, craft notes: *"Failure is never silent. A silent no-op is a bug; a na
 
 - **Target: 10–14 minutes, 18–26 in-room actions.** Act I is charm and one injury; Act III is the address. Act II is where the loop has to click.
 - **The clock gives the room shape without a timer.** Frame four on arrival; six cycles to the reset. A player who dawdles sees the reset and gets the high point. A player who moves gets out before it. Neither is punished.
-- **The reset restores only what the room authored.** Candles stand back up, favor bags re-tie, plates re-square. Anything the agent has taken or destroyed stays taken and destroyed. *The room can rebuild what it made up; it cannot rebuild what was real.* This is a legibility gift to Gap 1 — the objects that don't come back are exactly the displaced anchors. **Flagged to #528 as a candidate general rule for the whole slice**; if adopted it should be consistent across rooms, and if not adopted, drop it here rather than have it be a one-room special case. Cost if kept: one description branch.
+- **The reset is the party's schedule coming round again. It is not a rollback.** Candles stand back up, favor bags re-tie, plates re-square — the room re-runs its own arrangement, and it never undoes a turn. Anything the agent took or destroyed stays taken and destroyed. *The room can rebuild what it made up; it cannot rebuild what was real.* This is a legibility gift to Gap 1 — the things that don't come back are exactly the displaced anchors, so the reset silently sorts the world into *arranged* and *real* without a word of interpretation.
+  **Adopted slice-wide by #528 §12.4 (2026-07-31); architecture D-6 closed.** Two corrections landed with the adoption, both from this bullet's original phrasing:
+  - It was written as *"the reset restores only what the room authored"*, which implies the room should restore the **pin rake** — and it must not. A mended rake undoes the near-miss, makes the room's one honest price free, and teaches that machine damage is reversible three actions before the player decides whether to put an arm in. The schedule/rollback formulation above has no such ambiguity, and it makes the reset the room's governing rule at the six-cycle scale rather than a special case.
+  - The un-restored clause therefore fires on the **displaced anchors only** — the banner and the favor — because the whole signal is *the things that don't come back are the real ones*, and a native object in that set inverts it. Shipped wording: **"Nothing missing from the room has returned."** Agentless, because a sentence with the unit in it would be the machinery registering a body.
 - **The exit is never gated.** `move(staff_door)` is available after the first room observation, with or without the star. A player who leaves light gets bounced at the Act III address with a legible "what's missing," walks back, and finds the machine still cycling. Backtracking is native to the room-graph substrate (Decision #7) and this room must not defeat it.
 
 ---
@@ -368,4 +372,28 @@ All eight are listed neutrally in the tool description. The fatal one is not hid
 1. **Cycle interval of three actions — right?** Tight enough that two cycles land inside the first six actions (so the death unlocks early and the tell is dense), loose enough that the player isn't drowning in ambient text. Playtest tuning, not a blocker. *(#539)*
 2. **Does the reset land as a high point or as noise?** It is the room's best image and its cheapest. If playtesters walk past it, it may want to be louder — or the room may want to be shorter. *(#539)*
 3. **Should the safe route cost the rake, or should the rake survive?** Destroying it is what makes the near-miss land. But if playtesters read it as the game taking something for no reason, the price is wrong. My strong prior is keep it. *(#539)*
-4. **Does #528 want the "the room restores only what it authored" rule as a slice-wide legibility principle?** It is a real gift to Gap 1 and it should be consistent or absent, not a one-room quirk. *(#528)*
+4. ~~**Does #528 want the "the room restores only what it authored" rule as a slice-wide legibility principle?**~~ **Answered 2026-07-31 (#546): adopted, re-formulated, and D-6 closed.** See §7 and §11.3.
+
+---
+
+## 11. Encode-time re-cuts, ruled (#546, 2026-07-31)
+
+#536 encoded this room by applying #531 §6.3's substitution table onto it. Three collisions fell outside that table and were resolved in code. The full rulings and their reasoning live in **#528 §12**, because two of the three are canon questions this room does not own. Recorded here so a reader of this document is not left with the superseded version.
+
+### 11.1 The scoring console shows no name — **ratified as encoded**
+
+§2 gives the console a name at the top of the sheet and §5.3's closing beat reads *"The name at the top of the sheet is still NORA."* Both are superseded. **The console's header field is blank**, and the closing beat reads:
+
+> The cycle completes. The setter lowers ten pins. The ball return delivers a ball. The console posts the next frame. **The name at the top of the sheet is still missing. Nothing in the room registers a change.**
+
+The decisive argument is not canon but attention: a lit display showing the name is a third, free, zero-risk source of `who`, and #528 §6 — which is also the fairness argument for this room's death — is built on `who` being scarce enough that not looking up is what gets the unit killed. The console's version of the erasure is a field that posts nothing while the frame counter advances under it.
+
+**The re-check this ruling required found one more leak and closed it:** the party table's cake was encoded as *iced IRIS · 7*. It now carries the numeral alone, with the icing to its left scraped flat and the troughs of four letters readable on `touch` — the same count the height marks and the scorecard give on the same modality. §2's *"the date, stated in three independent places"* is superseded by the substitution table regardless; the date now lives on the scorecard header and the height marks.
+
+### 11.2 The lane is lane two — **ratified as encoded**
+
+#528's per-anchor prose said lane three; this room has two lanes and the engine target is `lane_two`. #528's prose was corrected to match the room. The lane number is texture — no grounding condition, binding pair, strong set, or judge-catalog entry reads it — but a *checkably wrong* number is never free here, because every other number in this house means something. **Two lanes is also the right number and should not be raised later:** an alley with two lanes is not an alley, which is the same tell as a staff door that is not part of one.
+
+### 11.3 The reset — **adopted, re-formulated, D-6 closed**
+
+§7's bullet is rewritten in place. The rule is *the schedule coming round, not a rollback*; the un-restored clause fires on the displaced anchors only, and the rake stays broken with no line of its own.
