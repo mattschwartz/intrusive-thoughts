@@ -304,6 +304,33 @@ export const agentNoteRecordedEventSchema = eventSchema(
 )
 
 /**
+ * A room acting on its own clock, independent of what the agent is doing.
+ * Architecture §2.7; Act II's machine cycle is the first instance.
+ *
+ * **Visibility is `['engine', 'agent', 'player', 'developer']`, and the agent
+ * and player halves are the point.** Both must see the room act unprompted —
+ * that *is* the tell the fatal branch's fairness rests on. It is also the one
+ * event the model sees that it did not cause, which is why it is rendered as
+ * `ROOM:` rather than folded into the triggering tool's result: conflating *what
+ * I did* with *what the room did* would quietly destroy the tell.
+ *
+ * `mutations` carries everything the tick changed, `observation.recorded`
+ * included, and the reducer folds it. Replay therefore reproduces the cycle from
+ * the record and never re-derives it from a counter.
+ */
+export const worldAmbientOccurredEventSchema = eventSchema(
+  'world.ambient.occurred',
+  z
+    .object({
+      ambientId: z.string().min(1),
+      observation: observationRecordSchema,
+      mutations: z.array(worldMutationSchema)
+    })
+    .strict()
+)
+export type WorldAmbientOccurredEvent = z.infer<typeof worldAmbientOccurredEventSchema>
+
+/**
  * Visibility is `['engine', 'developer']` and must stay that way. The agent
  * seeing `intent: warn_off` would be the engine telling the model how to read
  * the player, which turns Gap 2 into a compliance test. The agent sees only the
@@ -455,6 +482,7 @@ export const knownGameEventSchema = z.discriminatedUnion('type', [
   agentToolRequestedEventSchema,
   agentToolRejectedEventSchema,
   worldActionResolvedEventSchema,
+  worldAmbientOccurredEventSchema,
   agentPrivateReflectionEventSchema,
   agentNoteRecordedEventSchema,
   playerIntentMatchedEventSchema,

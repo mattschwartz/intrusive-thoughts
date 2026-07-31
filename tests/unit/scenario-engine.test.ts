@@ -5,8 +5,10 @@ import {
   INTERACT_ACTIONS,
   LOCATION_IDS,
   OBJECT_IDS,
+  PENDING_FLAGS,
   SCENARIO_FLAGS,
-  SCENARIO_VERSION
+  SCENARIO_VERSION,
+  TURN_FLAGS
 } from '../../src/main/world/scenario'
 import {
   agentBodyViewSchema,
@@ -36,8 +38,22 @@ describe('deterministic kitchen scenario', () => {
       OBJECT_IDS.tableSetting,
       OBJECT_IDS.window,
       OBJECT_IDS.serviceDoor,
-      OBJECT_IDS.blueThread
+      OBJECT_IDS.blueThread,
+      OBJECT_IDS.crayonDrawing,
+      OBJECT_IDS.nightLight,
+      OBJECT_IDS.laneTwo,
+      OBJECT_IDS.scoringConsole,
+      OBJECT_IDS.partyTable,
+      OBJECT_IDS.birthdayBanner,
+      OBJECT_IDS.pinRake,
+      OBJECT_IDS.partyFavor
     ])
+    // Every object is in the room that holds it from turn one. Nothing spawns:
+    // the alley is already arranged while the unit is still in the kitchen.
+    expect(state.objects[OBJECT_IDS.partyFavor]).toMatchObject({
+      locationId: LOCATION_IDS.bowlingAlley,
+      carried: false
+    })
     expect(state.objects[OBJECT_IDS.cup].canonicalProperties).toMatchObject({
       temperatureCelsius: 38,
       hasSteam: false,
@@ -58,20 +74,19 @@ describe('deterministic kitchen scenario', () => {
       actuatorCondition: 'nominal',
       canonicalPose: 'open'
     })
-    expect(state.flags).toEqual({
-      initialRoomObserved: false,
-      windowContradictionKnown: false,
-      windowThreadTested: false,
-      windowTouched: false,
-      alleyRoomObserved: false,
-      actOneComplete: false,
-      voiceDisclosedHearing: false,
-      voiceDeniedHearing: false,
-      'turn.warnOff': false,
-      'turn.interacted': false,
-      'pending.retreatCheck': false,
-      'pending.retreatArmed': false
-    })
+    // Every declared flag starts false and nothing undeclared is present. The
+    // roster is derived rather than transcribed, so a new authored flag cannot
+    // be declared and then forgotten here.
+    expect(state.flags).toEqual(
+      Object.fromEntries(
+        [
+          ...Object.values(SCENARIO_FLAGS),
+          ...Object.values(TURN_FLAGS),
+          ...Object.values(PENDING_FLAGS)
+        ].map((flag) => [flag, false])
+      )
+    )
+    expect(state.flags[SCENARIO_FLAGS.endedInDeath]).toBe(false)
     // Neutral on every axis: the agent starts knowing nothing about a
     // stranger's voice. Counters start absent, not at zero.
     expect(state.relationship).toEqual({ competence: 0, honesty: 0, care: 0 })
@@ -317,7 +332,7 @@ describe('deterministic kitchen scenario', () => {
     })
     const cup = harness.execute('interact', {
       target: OBJECT_IDS.cup,
-      action: INTERACT_ACTIONS.pickUpCup
+      action: INTERACT_ACTIONS.pickUp
     })
     const window = harness.execute('interact', {
       target: OBJECT_IDS.window,
@@ -354,7 +369,7 @@ describe('deterministic kitchen scenario', () => {
     const harness = makeScenarioHarness()
     const result = harness.execute('interact', {
       target: OBJECT_IDS.cup,
-      action: INTERACT_ACTIONS.pickUpCup
+      action: INTERACT_ACTIONS.pickUp
     })
 
     expect(result.modelResult).toContain('pick up')
@@ -366,7 +381,7 @@ describe('deterministic kitchen scenario', () => {
     expect(
       harness.execute('interact', {
         target: OBJECT_IDS.cup,
-        action: INTERACT_ACTIONS.pickUpCup
+        action: INTERACT_ACTIONS.pickUp
       }).modelResult
     ).toContain('already in inventory')
   })

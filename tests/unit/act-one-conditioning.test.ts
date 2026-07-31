@@ -151,7 +151,7 @@ describe('safe discovery', () => {
     const harness = makeScenarioHarness()
     harness.execute('interact', {
       target: OBJECT_IDS.cup,
-      action: INTERACT_ACTIONS.pickUpCup
+      action: INTERACT_ACTIONS.pickUp
     })
 
     expect(harness.state.relationship.competence).toBe(0)

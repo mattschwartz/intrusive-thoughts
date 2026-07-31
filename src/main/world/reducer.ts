@@ -102,6 +102,10 @@ function applyKnownEvent(state: GameState, event: KnownGameEvent): GameState {
       return { ...state, turnNumber: event.payload.turnNumber }
     case 'world.action.resolved':
       return event.payload.mutations.reduce(applyWorldMutation, state)
+    // The room acting on its own clock. Replay folds what the cycle recorded and
+    // never recomputes it from the counter. §2.7.
+    case 'world.ambient.occurred':
+      return event.payload.mutations.reduce(applyWorldMutation, state)
     // Replay folds the recorded mutations and never re-runs the matcher, so
     // retuning the phrase list cannot retroactively change a recorded run. §4.6.
     case 'player.intent.matched':

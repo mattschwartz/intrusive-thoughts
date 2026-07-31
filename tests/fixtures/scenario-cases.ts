@@ -61,6 +61,18 @@ export function makeScenarioHarness(): ScenarioHarness {
   return harness
 }
 
+/**
+ * A harness standing in the bowling alley, having walked there the way a run
+ * does. Two kitchen actions are spent getting here; neither touches the alley's
+ * clock, which starts on arrival.
+ */
+export function makeAlleyHarness(): ScenarioHarness {
+  const harness = makeScenarioHarness()
+  harness.execute('observe', { modality: 'visual' })
+  harness.execute('move', { destination: 'service_door' })
+  return harness
+}
+
 export const VALID_OBSERVATIONS = [
   ['room', 'visual'],
   ['room', 'audio'],

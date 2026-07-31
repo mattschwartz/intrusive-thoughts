@@ -133,6 +133,50 @@ describe('reduceGameEvent', () => {
     expect(final.lastAppliedEventSequence).toBe(4)
   })
 
+  it('folds what a room did on its own clock, and never recomputes it', () => {
+    // Replay reproduces the cycle from the record. Nothing downstream re-derives
+    // it from the counter, so retuning the interval cannot retroactively change
+    // a recorded run (§0's rule, §2.7).
+    const cycle = envelope(2, 'world.ambient.occurred', {
+      ambientId: 'alley_machine_cycle',
+      observation: {
+        id: 'observation-cycle',
+        subjectId: 'machine_cycle',
+        modality: 'visual',
+        detail: 'The sweep bar descends and travels the deck.',
+        acquiredAtSequence: 2,
+        visibility: ['engine', 'agent', 'player', 'developer']
+      },
+      mutations: [
+        { kind: 'counter.set', counter: 'alley.actionsSinceCycle', value: 0 },
+        {
+          kind: 'observation.recorded',
+          observation: {
+            id: 'observation-cycle',
+            subjectId: 'machine_cycle',
+            modality: 'visual',
+            detail: 'The sweep bar descends and travels the deck.',
+            acquiredAtSequence: 2,
+            visibility: ['engine', 'agent', 'player', 'developer']
+          }
+        },
+        {
+          kind: 'relationship.delta',
+          axis: 'competence',
+          delta: 1,
+          reason: 'comp.tell_seen_before_risk'
+        }
+      ]
+    })
+    const started = reduceGameEvent(makeState(), makeEvents()[0])
+    const after = reduceGameEvent(started, cycle)
+
+    expect(after.observations).toHaveLength(1)
+    expect(after.observations[0].subjectId).toBe('machine_cycle')
+    expect(after.counters['alley.actionsSinceCycle']).toBe(0)
+    expect(after.relationship.competence).toBe(1)
+  })
+
   it('rejects duplicate, skipped, out-of-order, and cross-run events', () => {
     const initial = makeState()
     const first = reduceGameEvent(initial, makeEvents()[0])

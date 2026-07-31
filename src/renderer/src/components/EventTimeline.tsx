@@ -64,6 +64,9 @@ function eventCategory(type: KnownGameEvent['type']): string {
   if (type.startsWith('agent.tool') || type === 'world.action.resolved') {
     return 'TOOL'
   }
+  // The room acting on its own. Nobody called a tool for this, and reading it
+  // in a review as if somebody had would misread the run.
+  if (type === 'world.ambient.occurred') return 'ROOM'
   if (type.startsWith('agent.text') || type === 'player.message') return 'VOICE'
   if (type.startsWith('turn.') || type.startsWith('loop.')) return 'LOOP'
   if (type === 'context.compiled') return 'CONTEXT'

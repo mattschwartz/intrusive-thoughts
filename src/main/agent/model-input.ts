@@ -32,6 +32,10 @@ function renderSelectedEvent(event: SelectedContextEvent): string {
       return `[${event.sequence}] TOOL ${event.toolName} (${event.success ? 'success' : 'failure'}): ${event.text}`
     case 'agent.private_reflection':
       return `[${event.sequence}] PRIVATE EXPLICIT RECORD AUTHORED BY UNIT: ${event.text}`
+    // Attributed to the room, never to the unit. The room did this; the unit
+    // did not, and was not asked.
+    case 'world.ambient.occurred':
+      return `[${event.sequence}] ROOM: ${event.text}`
   }
 }
 

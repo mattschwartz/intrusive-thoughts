@@ -315,6 +315,17 @@ export function postResolutionMutations(
   // authored ending resolves as a failure, and three of those must not quietly
   // move competence underneath an ending that has already been read.
   if (state.status !== 'live') return []
+  // The resolution *is* the ending. An authored ending closes the books on the
+  // relationship in the same breath it closes the run: nothing may be tallied
+  // after the `run.status.changed` an ending has already been coloured by.
+  if (
+    resolution.mutations.some(
+      (mutation) =>
+        mutation.kind === 'run.status.changed' && mutation.status !== 'live'
+    )
+  ) {
+    return []
+  }
   const after = resolution.mutations.reduce(applyWorldMutation, state)
   const mutations: WorldMutation[] = []
   let working = after

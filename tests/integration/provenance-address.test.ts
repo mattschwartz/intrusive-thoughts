@@ -12,7 +12,10 @@ import { rm } from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { RunStore } from '../../src/main/storage'
-import { ANCHOR_IDS } from '../../src/main/world/provenance'
+import {
+  ANCHOR_IDS,
+  PROVENANCE_IDENTITY_IDS
+} from '../../src/main/world/provenance'
 import { thresholdOpenedFlag } from '../../src/main/world/rooms'
 import type { GameState, KnownGameEvent } from '../../src/shared'
 import { FakeJudgeGateway } from '../fixtures/fake-judge-gateway'
@@ -264,9 +267,24 @@ describe('the address, end to end and offline', () => {
       compiled?.type === 'context.compiled' ? compiled.payload.context : {}
 
     expect(JSON.stringify(context)).toContain('"name":"address"')
-    // And the tool description never hands over the answer key.
+
+    // The anchors are observable subjects, so their ids reach the model in the
+    // one place they have to — the `observe` and `interact` target lists. They
+    // reach it nowhere else, and the *answer key* reaches it nowhere at all:
+    // no identity, no gathered set, no candidates, no dimension assessment.
+    const { availableTools: _tools, ...contextWithoutTools } = context
     for (const anchorId of Object.values(ANCHOR_IDS)) {
-      expect(JSON.stringify(context)).not.toContain(anchorId)
+      expect(JSON.stringify(contextWithoutTools)).not.toContain(anchorId)
+    }
+    for (const answerKeyField of [
+      PROVENANCE_IDENTITY_IDS.irisBedroom,
+      'gatheredAnchorIds',
+      'effectiveAnchorIds',
+      'candidateAnchorIds',
+      'missingDimensions',
+      'rulesetVersion'
+    ]) {
+      expect(JSON.stringify(context)).not.toContain(answerKeyField)
     }
   })
 })

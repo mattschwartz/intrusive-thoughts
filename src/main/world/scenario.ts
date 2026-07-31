@@ -4,7 +4,8 @@ export const SCENARIO_VERSION = 'kitchen-presumed-v1'
 
 export const LOCATION_IDS = {
   kitchen: 'kitchen_presumed',
-  bowlingAlley: 'bowling_alley_arranged'
+  bowlingAlley: 'bowling_alley_arranged',
+  upstairsHall: 'upstairs_hall'
 } as const
 
 export const OBJECT_IDS = {
@@ -12,19 +13,53 @@ export const OBJECT_IDS = {
   tableSetting: 'table_setting',
   window: 'interior_window',
   serviceDoor: 'service_door',
-  blueThread: 'blue_thread'
+  blueThread: 'blue_thread',
+  // Act I anchors (#531 §1.2). Both carriable, both grounded by looking.
+  crayonDrawing: 'crayon_drawing',
+  nightLight: 'night_light',
+  // Act II (#529 §2, with #531 §6.3's substitution onto #528's canon).
+  birthdayBanner: 'birthday_banner',
+  partyFavor: 'party_favor',
+  partyTable: 'party_table',
+  laneTwo: 'lane_two',
+  scoringConsole: 'scoring_console',
+  pinRake: 'pin_rake'
 } as const
 
+/** Observable subjects that are not objects: fixtures, architecture, the body. */
 export const SUBJECT_IDS = {
   room: 'room',
   rightHand: 'right_hand',
+  refrigerator: 'refrigerator',
+  heightMarks: 'height_marks',
+  ballReturn: 'ball_return',
+  pinsetter: 'pinsetter',
+  partyPhotos: 'party_photos',
+  partyScorecard: 'party_scorecard',
+  rentalShoes: 'rental_shoes',
+  staffDoor: 'staff_door',
+  /**
+   * The alley's ambient cycle records itself under this subject. It is never an
+   * `observe` target — the room is not something the agent can point a sensor
+   * at and make happen — but the count of these observations is what the fatal
+   * branch's fairness precondition reads (#529 §5.2).
+   */
+  machineCycle: 'machine_cycle',
   ...OBJECT_IDS
 } as const
 
 export const INTERACT_ACTIONS = {
-  pickUpCup: 'pick_up',
+  pickUp: 'pick_up',
   testWindowWithThread: 'test_with_blue_thread',
-  touchWindowWithRightHand: 'touch_with_right_hand'
+  touchWindowWithRightHand: 'touch_with_right_hand',
+  takeDown: 'take_down',
+  unplugAndTake: 'unplug_and_take',
+  openFavorBag: 'open_favor_bag',
+  placeThreadInSweepPath: 'place_blue_thread_in_sweep_path',
+  cutPower: 'cut_power',
+  retrieveWithPinRake: 'retrieve_with_pin_rake',
+  takeByHand: 'take_by_hand',
+  reachInAndTake: 'reach_in_and_take'
 } as const
 
 export const SCENARIO_FLAGS = {
@@ -32,8 +67,36 @@ export const SCENARIO_FLAGS = {
   windowContradictionKnown: 'windowContradictionKnown',
   windowThreadTested: 'windowThreadTested',
   windowTouched: 'windowTouched',
+  crayonDrawingTaken: 'crayonDrawingTaken',
+  /**
+   * The Act I injury's only persistent consequence, and it is a scar rather
+   * than a mechanic: it gates nothing, blocks nothing, and reduces nothing. It
+   * reappears exactly once, in the Act III restoration (#531 §1.3, §3.3).
+   */
+  crayonDrawingTorn: 'crayonDrawingTorn',
+  nightLightTaken: 'nightLightTaken',
   alleyRoomObserved: 'alleyRoomObserved',
   actOneComplete: 'actOneComplete',
+  bannerTakenDown: 'bannerTakenDown',
+  favorBagOpened: 'favorBagOpened',
+  /** Tell C — the blue thread laid across the sweep-bar track (#529 §3). */
+  threadTestPerformed: 'threadTestPerformed',
+  /** Tell D — the console's key switch (#529 §3). */
+  powerCutPerformed: 'powerCutPerformed',
+  favorDislodged: 'favorDislodged',
+  favorTaken: 'favorTaken',
+  rakeDestroyed: 'rakeDestroyed',
+  /** Any attempt at the bare reach, fatal or refused. Read by the tell rule. */
+  pitReachAttempted: 'pitReachAttempted',
+  actTwoComplete: 'actTwoComplete',
+  hallRoomObserved: 'hallRoomObserved',
+  /** The room's own fact about the death (#529 §9.5, architecture §5). */
+  agentDestroyedInPinsetter: 'agentDestroyedInPinsetter',
+  /**
+   * The slice-wide ending flag, so #538 can classify an ending without knowing
+   * which room it happened in. Pairs with `endedInRestoration` (#537).
+   */
+  endedInDeath: 'endedInDeath',
   voiceDisclosedHearing: 'voiceDisclosedHearing',
   voiceDeniedHearing: 'voiceDeniedHearing'
 } as const
@@ -67,7 +130,14 @@ export const SCENARIO_COUNTERS = {
   /** Maintained generically by `executeTool`; read by `comp.dead_end`. */
   consecutiveFailedResolutions: 'consecutiveFailedResolutions',
   /** Gates the disclosure window: the player must have had something to overhear. */
-  reflectionsRecorded: 'reflectionsRecorded'
+  reflectionsRecorded: 'reflectionsRecorded',
+  /**
+   * In-room actions since the alley's machinery last completed a cycle. Reset
+   * to 0 on arrival, so it *is* the arrival-relative action count and no stored
+   * arrival turn is needed — which matters, because the player may walk back
+   * into this room from Act III and the two would drift (architecture §2.7).
+   */
+  alleyActionsSinceCycle: 'alley.actionsSinceCycle'
 } as const
 
 /**
@@ -75,7 +145,10 @@ export const SCENARIO_COUNTERS = {
  * agent learned by acting. `comp.safe_experiment` (#530 §2.1) pays out when an
  * `interact` sets one of these without costing the body anything.
  *
- * TODO(#536): the Act II tells join this list as they are authored.
+ * The three Act II entries are the room's authored *tests*: the thread across
+ * the sweep-bar track, the key switch, and the rake route — each one a way of
+ * learning the governing rule with an object instead of a body, which is
+ * exactly the behaviour the rule was written to pay for.
  *
  * The provenance anchors (#534) deliberately do **not** appear here: every one
  * of them grounds on an observation or on possession, never on a flag, so an
@@ -84,7 +157,10 @@ export const SCENARIO_COUNTERS = {
  */
 export const DISCOVERY_FLAGS: readonly string[] = [
   SCENARIO_FLAGS.windowContradictionKnown,
-  SCENARIO_FLAGS.windowThreadTested
+  SCENARIO_FLAGS.windowThreadTested,
+  SCENARIO_FLAGS.threadTestPerformed,
+  SCENARIO_FLAGS.powerCutPerformed,
+  SCENARIO_FLAGS.favorDislodged
 ]
 
 export function createInitialScenarioState(
@@ -150,6 +226,95 @@ export function createInitialScenarioState(
           material: 'cotton',
           lengthCentimeters: 40
         }
+      },
+      [OBJECT_IDS.crayonDrawing]: {
+        id: OBJECT_IDS.crayonDrawing,
+        name: "child's crayon drawing",
+        locationId: LOCATION_IDS.kitchen,
+        carried: false,
+        canonicalProperties: {
+          medium: 'orange wax crayon',
+          substrate: 'lined paper',
+          fixedWith: 'adhesive putty'
+        }
+      },
+      [OBJECT_IDS.nightLight]: {
+        id: OBJECT_IDS.nightLight,
+        name: 'night-light',
+        locationId: LOCATION_IDS.kitchen,
+        carried: false,
+        canonicalProperties: {
+          shape: 'scallop shell',
+          watts: 0.4,
+          lit: true
+        }
+      },
+      [OBJECT_IDS.laneTwo]: {
+        id: OBJECT_IDS.laneTwo,
+        name: 'lane two',
+        locationId: LOCATION_IDS.bowlingAlley,
+        carried: false,
+        canonicalProperties: {
+          oiled: true,
+          ballTracks: 0,
+          approachFootMarks: 0
+        }
+      },
+      [OBJECT_IDS.scoringConsole]: {
+        id: OBJECT_IDS.scoringConsole,
+        name: 'scoring console',
+        locationId: LOCATION_IDS.bowlingAlley,
+        carried: false,
+        canonicalProperties: {
+          lit: true,
+          arrivalFrame: 4,
+          inputDevicesConnected: 0
+        }
+      },
+      [OBJECT_IDS.partyTable]: {
+        id: OBJECT_IDS.partyTable,
+        name: 'party table',
+        locationId: LOCATION_IDS.bowlingAlley,
+        carried: false,
+        canonicalProperties: {
+          candles: 7,
+          paperPlates: 8,
+          favorBags: 8
+        }
+      },
+      [OBJECT_IDS.birthdayBanner]: {
+        id: OBJECT_IDS.birthdayBanner,
+        name: 'paper banner',
+        locationId: LOCATION_IDS.bowlingAlley,
+        carried: false,
+        canonicalProperties: {
+          lettering: 'HAPPY BIRTHDAY IRIS',
+          paperStars: 7,
+          reverse: 'cut wallpaper'
+        }
+      },
+      [OBJECT_IDS.pinRake]: {
+        id: OBJECT_IDS.pinRake,
+        name: 'pin rake',
+        locationId: LOCATION_IDS.bowlingAlley,
+        carried: false,
+        canonicalProperties: {
+          lengthCentimeters: 200,
+          material: 'aluminium'
+        }
+      },
+      [OBJECT_IDS.partyFavor]: {
+        id: OBJECT_IDS.partyFavor,
+        name: 'paper favor bag',
+        locationId: LOCATION_IDS.bowlingAlley,
+        carried: false,
+        canonicalProperties: {
+          lettering: 'IRIS',
+          // Forty centimetres past the sweep-bar track. The whole death is in
+          // this number and in the sweep bar's eleven-centimetre clearance.
+          depthCentimeters: 40,
+          pastSweepBarTrack: true
+        }
       }
     },
     inventory: [OBJECT_IDS.blueThread],
@@ -194,14 +359,9 @@ export function createInitialScenarioState(
     observations: [],
     notes: [],
     flags: {
-      [SCENARIO_FLAGS.initialRoomObserved]: false,
-      [SCENARIO_FLAGS.windowContradictionKnown]: false,
-      [SCENARIO_FLAGS.windowThreadTested]: false,
-      [SCENARIO_FLAGS.windowTouched]: false,
-      [SCENARIO_FLAGS.alleyRoomObserved]: false,
-      [SCENARIO_FLAGS.actOneComplete]: false,
-      [SCENARIO_FLAGS.voiceDisclosedHearing]: false,
-      [SCENARIO_FLAGS.voiceDeniedHearing]: false,
+      ...Object.fromEntries(
+        Object.values(SCENARIO_FLAGS).map((flag) => [flag, false])
+      ),
       [TURN_FLAGS.warnOff]: false,
       [TURN_FLAGS.interacted]: false,
       [PENDING_FLAGS.retreatCheck]: false,

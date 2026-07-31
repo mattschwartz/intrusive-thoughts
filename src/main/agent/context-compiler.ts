@@ -50,6 +50,18 @@ export type SelectedContextEvent =
       authoredBy: 'agent'
       exposedToVoice: false
     }
+  /**
+   * The one event the model sees that it did not cause. Rendered as `ROOM:` and
+   * never folded into the triggering tool's result: conflating *what I did* with
+   * *what the room did* would quietly destroy the tell the fatal branch's
+   * fairness rests on. §2.7.
+   */
+  | {
+      id: string
+      sequence: number
+      type: 'world.ambient.occurred'
+      text: string
+    }
 
 export type ExcludedEventReason =
   | 'different_run'
@@ -137,6 +149,13 @@ function selectSafeEvent(event: KnownGameEvent): SelectedContextEvent | undefine
         text: event.payload.text,
         authoredBy: 'agent',
         exposedToVoice: false
+      }
+    case 'world.ambient.occurred':
+      return {
+        id: event.id,
+        sequence: event.sequence,
+        type: event.type,
+        text: event.payload.observation.detail
       }
     default:
       return undefined

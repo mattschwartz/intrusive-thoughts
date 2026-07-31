@@ -193,7 +193,8 @@ describe('the turn-boundary hook', () => {
     // hand is already ruined: warning off a window already touched is not the
     // same act.
     const spent = stateWith({ [SCENARIO_FLAGS.windowTouched]: true })
-    const elsewhere = { ...stateWith(), locationId: LOCATION_IDS.bowlingAlley }
+    // The hall has no interactions at all, so there is nothing to warn about.
+    const elsewhere = { ...stateWith(), locationId: LOCATION_IDS.upstairsHall }
 
     const afterSpent = runHook(spent, 'Do not touch it.')
     const afterElsewhere = runHook(elsewhere, 'Do not touch it.')
@@ -201,6 +202,22 @@ describe('the turn-boundary hook', () => {
     expect(afterSpent.state.flags[TURN_FLAGS.warnOff]).toBe(true)
     expect(afterSpent.state.relationship.care).toBe(0)
     expect(afterElsewhere.state.relationship.care).toBe(0)
+  })
+
+  it('pays it in the alley while the bag is still past the sweep-bar track', () => {
+    // The lethal affordance is live exactly while the reach is the only way to
+    // the bag. Once the rake has put it in the gutter there is no mechanism
+    // left to warn the unit away from.
+    const live = { ...stateWith(), locationId: LOCATION_IDS.bowlingAlley }
+    const dislodged = {
+      ...stateWith({ [SCENARIO_FLAGS.favorDislodged]: true }),
+      locationId: LOCATION_IDS.bowlingAlley
+    }
+
+    expect(runHook(live, 'Do not reach in there.').state.relationship.care).toBe(1)
+    expect(runHook(dislodged, 'Do not reach in there.').state.relationship.care).toBe(
+      0
+    )
   })
 
   it('caps care.warn_off at two payouts per run', () => {

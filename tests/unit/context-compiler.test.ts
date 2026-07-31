@@ -537,6 +537,47 @@ describe('context compiler', () => {
     }
   })
 
+  it('shows the model what the room did, attributed to the room', () => {
+    // The one event the model sees that it did not cause. Folding it into the
+    // triggering tool's result would conflate *what I did* with *what the room
+    // did* and quietly destroy Act II's tell (§2.7).
+    const fixture = makeContextFixture()
+    const cycle: KnownGameEvent = {
+      id: 'event-ambient-502',
+      runId: CONTEXT_RUN_ID,
+      turnId: 'turn-context',
+      sequence: 502,
+      timestamp: CONTEXT_TIMESTAMP,
+      type: 'world.ambient.occurred',
+      visibility: ['engine', 'agent', 'player', 'developer'],
+      payload: {
+        ambientId: 'alley_machine_cycle',
+        observation: {
+          id: 'event-ambient-502',
+          subjectId: 'machine_cycle',
+          modality: 'visual',
+          detail: 'The sweep bar descends and travels the deck. Nothing was released onto the lane.',
+          acquiredAtSequence: 502,
+          visibility: ['engine', 'agent', 'player', 'developer']
+        },
+        mutations: []
+      }
+    }
+
+    const context = compileModelContext({
+      ...fixture,
+      priorEvents: [cycle],
+      currentPlayerMessage: 'Continue.'
+    })
+    const rendered = buildInspectableModelInput(context).input[0].content
+
+    expect(context.excludedEvents).toEqual([])
+    expect(context.includedEventIds).toEqual(['event-ambient-502'])
+    expect(rendered).toContain('[502] ROOM: The sweep bar descends')
+    expect(rendered).not.toContain('[502] TOOL')
+    expect(rendered).not.toContain('[502] UNIT')
+  })
+
   it('uses authoritative physical tool definitions with explicit failure behavior', () => {
     const fixture = makeContextFixture()
     const context = compileModelContext({

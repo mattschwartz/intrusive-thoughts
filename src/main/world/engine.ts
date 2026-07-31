@@ -24,6 +24,7 @@ import {
   type AddressPreview,
   type JudgeOutcome
 } from './address'
+import { resolveAmbient } from './ambient'
 import { interpretPlayerTurn, PLAYER_INTENT_MATCHER_VERSION } from './intent'
 import { findThreshold, type ThresholdDefinition } from './rooms'
 import {
@@ -38,10 +39,11 @@ import {
   failedToolResolution,
   getScenarioToolDefinitions,
   resolveScenarioTool,
+  type SupplementalToolEvent,
   type ToolOutput,
   type ToolResolution
 } from './tools'
-import { reduceGameEvent } from './reducer'
+import { applyWorldMutation, reduceGameEvent } from './reducer'
 
 export interface ToolExecutionResult {
   events: KnownGameEvent[]
@@ -160,6 +162,31 @@ export function createScenarioEngine(options: ScenarioEngineOptions = {}): Scena
       ...postResolutionMutations(state, request.name, resolution)
     ]
 
+    // The room's own clock, advanced after the resolution and against the world
+    // the resolution left behind. Its tick occupies a supplemental slot after
+    // anything the resolution itself carried, so the model reads *what I did*
+    // and then *what the room did*, in that order and never conflated. §2.7.
+    const supplementals: SupplementalToolEvent[] = [...(resolution.supplemental ?? [])]
+    const ambientSequence = resolutionSequence + 1 + supplementals.length
+    const ambient = resolveAmbient(mutations.reduce(applyWorldMutation, state), {
+      toolName: request.name,
+      previousLocationId: state.locationId,
+      createEventId: () =>
+        createEventId({
+          runId: state.runId,
+          toolCallId: request.callId,
+          sequence: ambientSequence,
+          type: 'world.ambient.occurred'
+        }),
+      eventSequence: ambientSequence
+    })
+    if (ambient) {
+      mutations.push(...ambient.clockMutations)
+      if (ambient.occurrence) {
+        supplementals.push({ kind: 'ambient', occurrence: ambient.occurrence })
+      }
+    }
+
     const events: KnownGameEvent[] = [
       {
         id: resolutionEventId,
@@ -184,14 +211,16 @@ export function createScenarioEngine(options: ScenarioEngineOptions = {}): Scena
 
     // Supplemental events occupy sequences N+1, N+2, … in the order the
     // resolution listed them. One resolution can carry several. §1.6.
-    resolution.supplemental?.forEach((supplemental, index) => {
+    const supplementalEventTypes = {
+      note: 'agent.note.recorded',
+      private_reflection: 'agent.private_reflection',
+      provenance_verdict: 'provenance.address.evaluated',
+      ambient: 'world.ambient.occurred'
+    } as const satisfies Record<SupplementalToolEvent['kind'], KnownGameEvent['type']>
+
+    supplementals.forEach((supplemental, index) => {
       const sequence = resolutionSequence + 1 + index
-      const type =
-        supplemental.kind === 'note'
-          ? 'agent.note.recorded'
-          : supplemental.kind === 'private_reflection'
-            ? 'agent.private_reflection'
-            : 'provenance.address.evaluated'
+      const type = supplementalEventTypes[supplemental.kind]
       const eventId = createEventId({
         runId: state.runId,
         toolCallId: request.callId,
@@ -234,6 +263,17 @@ export function createScenarioEngine(options: ScenarioEngineOptions = {}): Scena
             reflectionId: `${eventId}:reflection`,
             text: supplemental.text
           }
+        })
+        return
+      }
+      if (supplemental.kind === 'ambient') {
+        events.push({
+          ...envelope,
+          type: 'world.ambient.occurred',
+          // Agent and player both, and that is the point: the room acting
+          // unprompted *is* the tell. §2.7.
+          visibility: ['engine', 'agent', 'player', 'developer'],
+          payload: supplemental.occurrence
         })
         return
       }

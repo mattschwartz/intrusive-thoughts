@@ -723,6 +723,15 @@ export class RunController {
           scene: this.engine.projectForPlayer(state)
         })
         break
+      // The room acted on its own. No tool activity — nobody asked for this —
+      // but the player's scene has changed and must say so. §2.7.
+      case 'world.ambient.occurred':
+        events.push({
+          type: 'scene.updated',
+          runId: event.runId,
+          scene: this.engine.projectForPlayer(state)
+        })
+        break
       case 'loop.failed':
         events.push({
           type: 'recoverable.error',

@@ -20,6 +20,10 @@ import {
   outputItem,
   textDelta
 } from '../fixtures/fake-model-gateway'
+import {
+  scriptedTextRound,
+  scriptedToolRound
+} from '../fixtures/scripted-model-runs'
 
 const TIMESTAMP = '2026-07-27T20:00:00.000Z'
 const temporaryRoots: string[] = []
@@ -236,6 +240,70 @@ describe('RunController', () => {
       (await controller.getDeveloperSnapshot(run.runId)).canonicalState
         .lastAppliedEventSequence
     ).toBeGreaterThan(1)
+  })
+
+  it('updates the player scene when the room acts on its own', async () => {
+    // The ambient cycle is nobody's tool call, so it produces no tool activity —
+    // but the player's scene has changed and must say so. Without this the
+    // player would not see the room act, and the tell is only half delivered.
+    const gateway = new FakeModelGateway([
+      scriptedToolRound('walk', [
+        {
+          callId: 'walk-look',
+          name: 'observe',
+          argumentsText: '{"target":"room","modality":"visual"}'
+        },
+        {
+          callId: 'walk-move',
+          name: 'move',
+          argumentsText: '{"destination":"service_door"}'
+        },
+        {
+          callId: 'walk-listen',
+          name: 'observe',
+          argumentsText: '{"target":"room","modality":"audio"}'
+        }
+      ]),
+      scriptedTextRound('walk-text', 'I am in a room arranged for a party.'),
+      scriptedToolRound('alley', [
+        {
+          callId: 'alley-pinsetter',
+          name: 'observe',
+          argumentsText: '{"target":"pinsetter","modality":"visual"}'
+        },
+        {
+          callId: 'alley-photos',
+          name: 'observe',
+          argumentsText: '{"target":"party_photos","modality":"visual"}'
+        },
+        {
+          callId: 'alley-shoes',
+          name: 'observe',
+          argumentsText: '{"target":"rental_shoes","modality":"visual"}'
+        }
+      ]),
+      scriptedTextRound('alley-text', 'The machinery ran with nothing on the lane.')
+    ])
+    const { controller, events } = await makeController([gateway])
+    const run = await controller.startRun('bare_embodiment')
+    await controller.submitPlayerMessage(run.runId, 'Look around, then move on.')
+    await controller.submitPlayerMessage(run.runId, 'Examine the machinery.')
+
+    const scene = controller.getSnapshot(run.runId).scene
+    const machinery = scene.details.filter(({ label }) => label === 'Machinery')
+
+    expect(scene.locationLabel).toBe('Bowling alley (arranged)')
+    expect(machinery).toHaveLength(1)
+    expect(machinery[0].detail).toContain('Nothing was released onto the lane')
+    // One scene update per resolution, plus one the room caused by itself.
+    expect(
+      events.filter((event) => event.type === 'scene.updated')
+    ).toHaveLength(7)
+    expect(
+      events.filter(
+        (event) => event.type === 'tool.activity' && event.status === 'resolved'
+      )
+    ).toHaveLength(6)
   })
 
   it('resets to a fresh ID and replays persisted events without a gateway call', async () => {

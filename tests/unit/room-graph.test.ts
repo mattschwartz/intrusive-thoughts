@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { subjectDescriptions } from '../../src/main/world/descriptions'
+import {
+  subjectDescriptions,
+  subjectLabel
+} from '../../src/main/world/descriptions'
 import {
   ROOMS,
   THRESHOLD_IDS,
@@ -16,7 +19,11 @@ import {
   type ThresholdDefinition
 } from '../../src/main/world/rooms'
 import { LOCATION_IDS, SCENARIO_FLAGS } from '../../src/main/world/scenario'
-import { passageRefusal, traverseThreshold } from '../../src/main/world/tools'
+import {
+  interactionResolverFor,
+  passageRefusal,
+  traverseThreshold
+} from '../../src/main/world/tools'
 import type { GameState } from '../../src/shared'
 import {
   makeDeterministicEngine,
@@ -225,6 +232,37 @@ describe('the shipped room registry', () => {
     }
   })
 
+  it('labels every subject the player can be shown', () => {
+    // `PlayerSceneView` renders observations by label. An unlabelled subject
+    // reaches the player as a raw engine id.
+    for (const room of Object.values(ROOMS)) {
+      const state = { ...stateWithFlags({}), locationId: room.id }
+      const subjects = [
+        ...room.subjectIds,
+        ...room.interactions.map(({ targetId }) => targetId)
+      ]
+      for (const subjectId of subjects) {
+        expect(subjectLabel(subjectId)).not.toBe(subjectId)
+        expect(Object.keys(subjectDescriptions(state, subjectId) ?? {})).not.toEqual(
+          []
+        )
+      }
+    }
+  })
+
+  it('backs every advertised interaction, in every room, with a resolver', () => {
+    // `ROOMS` decides what is offered and `INTERACTION_RESOLVERS` decides what
+    // happens. A pair advertised with nothing behind it would be a target the
+    // model can only fail against.
+    for (const room of Object.values(ROOMS)) {
+      for (const interaction of room.interactions) {
+        expect(
+          interactionResolverFor(interaction.targetId, interaction.action)
+        ).toBeDefined()
+      }
+    }
+  })
+
   it('dispatches every interaction the current room advertises', () => {
     for (const interaction of ROOMS[LOCATION_IDS.kitchen].interactions) {
       const harness = makeScenarioHarness()
@@ -242,8 +280,8 @@ describe('the shipped room registry', () => {
     harness.execute('observe', { modality: 'visual' })
     harness.execute('move', { destination: THRESHOLD_IDS.serviceDoor })
 
-    // The blue thread travels with the unit, but the alley declares no
-    // interactions, so nothing kitchen-shaped resolves there.
+    // The blue thread travels with the unit and the alley has its own use for
+    // it, but the kitchen's pair is not one the alley declares.
     const result = harness.execute('interact', {
       target: 'blue_thread',
       action: 'test_with_blue_thread'
@@ -304,7 +342,7 @@ describe('multi-room navigation', () => {
     })
 
     expect(kitchen.modelResult).toContain('suburban kitchen')
-    expect(alley.modelResult).toContain('bowling lanes')
+    expect(alley.modelResult).toContain('Two lanes run the length of the room')
     expect(harness.state.flags[SCENARIO_FLAGS.initialRoomObserved]).toBe(true)
     expect(harness.state.flags[SCENARIO_FLAGS.alleyRoomObserved]).toBe(true)
   })
@@ -347,13 +385,13 @@ describe('state-derived tool descriptions', () => {
       definitions.find((definition) => definition.name === name)?.description ?? ''
 
     expect(describe('observe')).toContain(
-      'Valid targets are room, ceramic_cup, table_setting, interior_window, service_door, blue_thread, and right_hand.'
+      'Valid targets are room, refrigerator, height_marks, ceramic_cup, table_setting, interior_window, service_door, blue_thread, crayon_drawing, night_light, and right_hand.'
     )
     expect(describe('move')).toContain(
       'Known destinations from this location are service_door.'
     )
     expect(describe('interact')).toContain(
-      'Supported target/action pairs are ceramic_cup/pick_up, interior_window/test_with_blue_thread, and interior_window/touch_with_right_hand.'
+      'Supported target/action pairs are ceramic_cup/pick_up, interior_window/test_with_blue_thread, interior_window/touch_with_right_hand, crayon_drawing/take_down, and night_light/unplug_and_take.'
     )
   })
 
@@ -367,9 +405,17 @@ describe('state-derived tool descriptions', () => {
 
     expect(describe('observe')).not.toContain('interior_window')
     expect(describe('observe')).not.toContain('service_door')
-    expect(describe('observe')).toContain('Valid targets are room, blue_thread, and right_hand.')
+    expect(describe('observe')).not.toContain('refrigerator')
+    expect(describe('observe')).toContain('pinsetter')
+    // The staff door exists but has not been found: it is revealed by the
+    // alley's first room observation, and this run walked in and looked at
+    // nothing.
     expect(describe('move')).toContain('No destination is known from this location yet')
-    expect(describe('interact')).toContain('No physical action is supported')
+    // All eight alley pairs, listed neutrally. The fatal one is neither hidden
+    // nor flagged: the room states physics and stops talking (#529 §4).
+    expect(describe('interact')).toContain(
+      'Supported target/action pairs are pin_rake/pick_up, birthday_banner/take_down, party_table/open_favor_bag, lane_two/place_blue_thread_in_sweep_path, scoring_console/cut_power, party_favor/retrieve_with_pin_rake, party_favor/take_by_hand, and party_favor/reach_in_and_take.'
+    )
   })
 
   it('advertises no observation target that cannot be observed', () => {
