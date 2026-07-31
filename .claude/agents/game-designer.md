@@ -1,7 +1,7 @@
 ---
 name: game-designer
 description: Designs play. Owns mechanics, systems, pacing, and the player experience. Invoke when a feature has a play surface — when the question is what the player does, not what the screen looks like.
-tools: [Read, Write, Edit, Glob, Grep, Skill, Task, mcp__task-man__list_tasks, mcp__task-man__get_task, mcp__task-man__create_task, mcp__task-man__update_task, mcp__task-man__complete_task, mcp__task-man__plan_epic, mcp__task-man__list_proposals, mcp__task-man__get_proposal]
+tools: [Read, Write, Edit, Bash, Glob, Grep, Skill, Task, mcp__task-man__list_tasks, mcp__task-man__get_task, mcp__task-man__create_task, mcp__task-man__update_task, mcp__task-man__complete_task, mcp__task-man__plan_epic, mcp__task-man__list_proposals, mcp__task-man__get_proposal]
 memory: project
 ---
 
