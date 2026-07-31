@@ -22,6 +22,7 @@ import {
   type ReplayControlInput,
   type ReplaySession,
   replaySessionSchema,
+  type RunStatus,
   type StoredRunSummary
 } from '../../shared'
 import { AgentLoop, type JudgeGateway, type ModelGateway } from '../agent'
@@ -86,6 +87,19 @@ const TOOL_SUMMARIES: Record<string, string> = {
   record_note: 'The agent records a note.',
   private_reflection: 'An internal record is deliberately exposed.',
   address: 'The agent addresses a threshold with a claim about what it was.'
+}
+
+/**
+ * A run status the run cannot leave. `'initialized'` and `'live'` are the two
+ * statuses a run can still act from; everything else is an ending, authored or
+ * otherwise, and the controller stops taking input at that point (§5).
+ *
+ * Written as an exclusion rather than a list of endings on purpose: a new
+ * terminal status added to `runStatusSchema` later must close the input box by
+ * default, not stay open until someone remembers this line.
+ */
+function isTerminalRunStatus(status: RunStatus): boolean {
+  return status !== 'initialized' && status !== 'live'
 }
 
 function publicMessage(error: unknown): string {
@@ -241,6 +255,16 @@ export class RunController {
 
   async submitPlayerMessage(runId: string, text: string): Promise<void> {
     const active = this.requireActive(runId)
+    // Named separately from `turn_not_available` because the two are different
+    // facts: one is "not yet", the other is "not ever again on this run". A run
+    // that has ended must say so rather than start a turn in which every tool
+    // fails with "this encounter is already complete."
+    if (this.status === 'ended') {
+      throw new RunControllerError(
+        'run_ended',
+        'This run has ended. Start a new record to begin another.'
+      )
+    }
     if (this.status !== 'awaiting_player' || this.turnPromise) {
       throw new RunControllerError(
         'turn_not_available',
@@ -271,7 +295,14 @@ export class RunController {
           })
           return
         }
-        this.setStatus('awaiting_player', runId)
+        // The turn completed; the *run* may not have. An authored ending is a
+        // terminal run status carried on a successful turn, so the decision is
+        // read off the state the turn left behind, not off the turn's own
+        // status and not off which ending fired.
+        this.setStatus(
+          isTerminalRunStatus(active.state.status) ? 'ended' : 'awaiting_player',
+          runId
+        )
       })
       .catch((error: unknown) => {
         this.setStatus('failed', runId)

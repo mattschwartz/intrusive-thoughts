@@ -42,6 +42,10 @@ const statusCopy: Record<GameControllerModel['state']['status'], string> = {
   awaiting_player: 'INPUT CHANNEL OPEN',
   running_turn: 'AGENT RESPONSE IN PROGRESS',
   replaying: 'PLAYBACK',
+  // The run reached an authored ending. The composer is already disabled by the
+  // same status; this line is the placeholder until the ending has a presented
+  // form of its own.
+  ended: 'RECORD CLOSED',
   failed: 'CONNECTION DISRUPTED'
 }
 

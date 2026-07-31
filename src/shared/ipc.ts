@@ -178,11 +178,20 @@ export const exportResultSchema = z
   .strict()
 export type ExportResult = z.infer<typeof exportResultSchema>
 
+/**
+ * `'ended'` is not `'failed'` and not `'awaiting_player'`: it is the run
+ * reaching one of its authored endings. It exists because the alternative is a
+ * live input box on a finished encounter, where every further tool call fails
+ * with "this encounter is already complete" — an ending that does not end
+ * (architecture §5). The controller refuses player messages in this state; what
+ * the renderer *shows* instead of the composer is the designer's call.
+ */
 export const controllerStatusSchema = z.enum([
   'no_run',
   'awaiting_player',
   'running_turn',
   'replaying',
+  'ended',
   'failed'
 ])
 export type ControllerStatus = z.infer<typeof controllerStatusSchema>

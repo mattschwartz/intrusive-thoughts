@@ -253,6 +253,34 @@ describe('renderer game state', () => {
     expect(state.focusRequest).toBe(1)
   })
 
+  it('closes the composer on an ended run and does not ask for the input focus', () => {
+    // The status signal is the whole contract this renderer owes an authored
+    // ending today (architecture §5): no live input, and no focus request —
+    // focus belongs to a turn handing control back, and an ended run never
+    // does.
+    let state = apply(loadedState(), {
+      type: 'loop.status',
+      runId: RUN.runId,
+      status: 'running_turn'
+    })
+    state = apply(state, {
+      type: 'loop.status',
+      runId: RUN.runId,
+      status: 'ended'
+    })
+
+    expect(state.status).toBe('ended')
+    expect(state.focusRequest).toBe(0)
+
+    const markup = renderToStaticMarkup(
+      createElement(GameShell, { controller: controllerFor(state) })
+    )
+    expect(markup).toContain('RECORD CLOSED')
+    expect(markup).toMatch(/<textarea[^>]*disabled=""/)
+    // The interrupt button belongs to a running turn, not to a finished one.
+    expect(markup).not.toContain('Interrupt response')
+  })
+
   it('re-enables cancellation when the cancel request itself fails locally', () => {
     let state = apply(loadedState(), {
       type: 'loop.status',
