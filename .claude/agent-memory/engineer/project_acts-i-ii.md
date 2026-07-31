@@ -29,9 +29,10 @@ carrying a `TODO(#537)` placeholder in the same shape #532 left the alley in.
    table only resolves in the room you are standing in.
 
 **Design gaps surfaced rather than improvised** — tasks #545 (#531 §6.2's two
-care-axis reachability fixes, deliberately *not* applied: #530 is canon and has
-not been amended) and #546 (three Act II content re-cuts: the machine displays no
-name, the lane is lane two, the reset does not restore what was taken).
+care-axis reachability fixes, deliberately *not* applied at the time; both were
+later accepted in #530 §2.3.1 and encoded by #548 — see [[care-relief-valves]])
+and #546 (three Act II content re-cuts: the machine displays no name, the lane is
+lane two, the reset does not restore what was taken).
 
 **How to apply:** when adding a room beat, the socket is almost always already
 there — `RoomDefinition.interactions` for what is offered,
