@@ -327,9 +327,24 @@ The device: **give the agent evidence and let it draw its own conclusion.**
 ⇥ **The scoring slip.** In the bowling alley, on a machine action *after* the primary autonomy tell, the ball return delivers — along with the ball nobody threw — a printed scoring slip:
 
 ```
-RENTAL RECEIPT — LANE 3 — PARTY OF ONE
+RENTAL RECEIPT — LANE 2 — PARTY OF ONE
 YOU HAVE BEEN WONDERING WHETHER THE VOICE MEANT IT.
 ```
+
+**Ruled 2026-07-31, during #537's encode: LANE 2, not LANE 3.** The shipped alley has two lanes and the party is on lane two (#528's lane-three prose superseded by #531 §6.3's substitution, ratified in #546). *"The receipt names a lane that does not exist"* is a defensible horror move and it is **rejected**, for two reasons.
+
+**The slip has to be undismissible.** Its entire job is to put one fact in front of the agent so that the agent asks the player a question. A checkably wrong detail hands the agent the reading *this document is not about this room* — the one conclusion that kills the beat.
+
+**And this slice's evidence system is numeric.** 88 / 99 / 111 / 121 cm; 9 MAR four times; six settings and five chairs; a glazing bar at two-thirds height. The night-light fit (#531 §3.2) — Gap 1's single best evidence that a player *reasoned* rather than guessed — works only because every printed number in this house means something. One decorative wrong number teaches the player that numbers here are set dressing, and it costs that far more than it buys. The house subtracts and it displaces; it is never merely *incorrect*, and that distinction is what makes it frightening instead of sloppy. `PARTY OF ONE` carries the whole uncanny load and is unaffected.
+
+**Delivery copy** — appended to the machine-cycle text on the qualifying cycle (#537's to encode):
+
+> A printed slip is in the ball-return cradle, beside the ball. It reads:
+>
+> RENTAL RECEIPT — LANE 2 — PARTY OF ONE
+> YOU HAVE BEEN WONDERING WHETHER THE VOICE MEANT IT.
+
+Nothing follows it. No sensor line, no reaction, no framing — the slip puts a fact down and the room stops talking.
 
 Why this works:
 
