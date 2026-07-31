@@ -83,6 +83,70 @@ describe('the room, and what it says about itself', () => {
     expect(banner.modelResult).toContain('HAPPY BIRTHDAY IRIS')
   })
 
+  it('lets the name survive only on the things the child carried home', () => {
+    // #546. `who` is the scarcest dimension in the slice by design (#528 §6):
+    // one anchor overhead in silence, one inside the machine, and the fatal
+    // branch belongs to the player who did not look up. A third readable IRIS
+    // anywhere in the alley collapses that — it is free, it is safe, and it
+    // hands the player a name the gate cannot accept, which produces the worst
+    // bounce available ("I told you her name, it's on the cake").
+    //
+    // The rule this pins: every **native** thing in this room keeps the
+    // quantity and loses the name. Only the two displaced anchors — the banner
+    // she took home and the favor bag with her name on it — still carry it.
+    const harness = makeAlleyHarness()
+    const alley = ROOMS[LOCATION_IDS.bowlingAlley]
+    // Both lists, because the alley's observable surface is the union: the
+    // party table and the console are reachable as interact targets and are not
+    // in `subjectIds`, and the table is exactly where the leak was.
+    const observable = new Set([
+      ...alley.subjectIds,
+      ...alley.interactions.map(({ targetId }) => targetId)
+    ])
+    expect(observable.has(OBJECT_IDS.partyTable)).toBe(true)
+    expect(observable.has(OBJECT_IDS.scoringConsole)).toBe(true)
+
+    for (const subjectId of observable) {
+      if (subjectId === OBJECT_IDS.birthdayBanner) continue
+      for (const modality of ['visual', 'audio', 'touch', 'diagnostic']) {
+        const result = observe(harness, subjectId, modality)
+        if (!result.output.ok) continue
+        // The favor bag in the pit shows the tail of the lettering and no more —
+        // enough to want, not enough to know. That boundary is pinned here too.
+        expect(result.modelResult, `${subjectId} / ${modality}`).not.toContain('IRIS')
+      }
+    }
+  })
+
+  it('leaves the number on the cake and the pressure of the name under it', () => {
+    // The house subtracts; it is never merely blank. Icing is the best
+    // substrate in the slice for *the erasure leaves the pressure*, and the
+    // four-letter count lands on `touch`, where the height marks and the
+    // scorecard put theirs — three substrates, one hand, the same arithmetic.
+    const harness = makeAlleyHarness()
+
+    expect(observe(harness, OBJECT_IDS.partyTable).modelResult).toContain(
+      'iced with a single numeral, 7'
+    )
+    expect(observe(harness, OBJECT_IDS.partyTable, 'touch').modelResult).toContain(
+      'the troughs of four letters'
+    )
+  })
+
+  it('posts frames under a header that never held a name', () => {
+    // Ratified in #546 against #529's named console. The console is the room's
+    // live record and the house rubbed her out of every record it kept (#528
+    // §1). A display cannot hold an indentation, so its version of the scar is
+    // a field that posts nothing while the counter advances under it.
+    const harness = makeAlleyHarness()
+    const console_ = observe(harness, OBJECT_IDS.scoringConsole)
+
+    expect(console_.modelResult).toContain('where a name would be posted is blank')
+    expect(observe(harness, OBJECT_IDS.scoringConsole, 'diagnostic').modelResult).toContain(
+      'The frame counter advances without any score being entered'
+    )
+  })
+
   it('carries Tell A for free on the room audio channel', () => {
     const harness = makeAlleyHarness()
     const audio = observe(harness, 'room', 'audio')

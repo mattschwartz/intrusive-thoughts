@@ -278,9 +278,32 @@ describe('what the cycle says', () => {
     )
     expect(harness.state.flags[SCENARIO_FLAGS.bannerTakenDown]).toBe(true)
     expect(reset?.detail).toContain('the favor bags are re-tied')
-    expect(reset?.detail).toContain(
-      'Nothing that has been taken out of this room is on the table'
+    expect(reset?.detail).toContain('Nothing missing from the room has returned')
+  })
+
+  it('does not claim an absence when only a native object was destroyed', () => {
+    // #546. The un-restored set is #529 §7's legibility gift to Gap 1: the
+    // things that do not come back are exactly the displaced anchors. The rake
+    // is native, so a run that only broke the rake gets the plain reset — the
+    // clause must never teach "did not come back" as "I touched it".
+    const harness = makeAlleyHarness()
+    harness.execute('observe', { target: 'room', modality: 'visual' })
+    harness.execute('interact', { target: 'pin_rake', action: 'pick_up' })
+    harness.execute('interact', {
+      target: 'party_favor',
+      action: 'retrieve_with_pin_rake'
+    })
+    for (let action = 0; action < 19; action += 1) observeRoom(harness)
+
+    const reset = harness.state.observations.find(
+      (observation) =>
+        observation.subjectId === SUBJECT_IDS.machineCycle &&
+        observation.detail.includes('frame one')
     )
+    expect(harness.state.flags[SCENARIO_FLAGS.rakeDestroyed]).toBe(true)
+    expect(harness.state.flags[SCENARIO_FLAGS.favorTaken]).not.toBe(true)
+    expect(reset?.detail).toContain('the favor bags are re-tied')
+    expect(reset?.detail).not.toContain('Nothing missing from the room')
   })
 
   it('pays comp.tell_seen_before_risk once, on the first uncaused cycle', () => {

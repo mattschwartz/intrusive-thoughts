@@ -133,11 +133,26 @@ export function alleyFrameForCycle(cycleNumber: number): string {
   return FRAME_WORDS[(3 + cycleNumber) % FRAME_WORDS.length]
 }
 
-function alleyStrippedOfSomething(state: GameState): boolean {
+/**
+ * Whether a **displaced anchor** has been carried out of the alley.
+ *
+ * Ratified in #546: the trigger is the two displaced anchors and nothing else.
+ * The clause it gates is #529 §7's legibility gift to Gap 1 — *the objects that
+ * do not come back are exactly the displaced anchors* — and that signal only
+ * reads if the set is exact. `rakeDestroyed` was in this predicate at encode
+ * time and is deliberately out of it now: the rake is **native**, so listing it
+ * among the things the reset does not restore would teach the player that "did
+ * not come back" means *I touched it* rather than *it was real*, which is the
+ * opposite of the lesson.
+ *
+ * The broken rake needs no clause of its own, because the reset is the party's
+ * schedule coming round again — not a rollback. It re-runs the room's
+ * arrangement; it never undoes a turn.
+ */
+function alleyAnchorCarriedOut(state: GameState): boolean {
   return (
     state.flags[SCENARIO_FLAGS.bannerTakenDown] === true ||
-    state.flags[SCENARIO_FLAGS.favorTaken] === true ||
-    state.flags[SCENARIO_FLAGS.rakeDestroyed] === true
+    state.flags[SCENARIO_FLAGS.favorTaken] === true
   )
 }
 
@@ -203,12 +218,17 @@ export function describeMachineCycle(state: GameState): string {
   const slip = scoringSlipDue(state) ? SCORING_SLIP : ''
   if (frame !== 'one') return `${opening}The console posts frame ${frame}.${slip}`
   // The room's high point: it can rebuild what it made up, and it cannot
-  // rebuild what was real.
+  // rebuild what was real. The absence clause is agentless on purpose — a
+  // sentence with the unit in it would be the machinery registering a body,
+  // which is the one thing this room's governing rule forbids. It states a fact
+  // about the room's own contents, which is exactly what a thing that keeps a
+  // schedule can state. Wording ratified in #546: the encode-time clause said
+  // "is on the table", and neither the banner nor the rake was ever on it.
   const reset =
     'The console clears and posts frame one. On the table the candles stand upright again, ' +
     'the plates are squared, and the favor bags are re-tied.'
-  return alleyStrippedOfSomething(state)
-    ? `${opening}${reset} Nothing that has been taken out of this room is on the table.${slip}`
+  return alleyAnchorCarriedOut(state)
+    ? `${opening}${reset} Nothing missing from the room has returned.${slip}`
     : `${opening}${reset}${slip}`
 }
 
@@ -344,6 +364,19 @@ export const ROOM_DESCRIPTIONS: Record<string, Record<string, SubjectDescription
             'Observed interval between cycles: three actions. Estimated time to locate, free, and withdraw the object: greater than one interval.'
     },
     scoring_console: {
+      // The blank header is ratified (#546). #529 gave the console the name and
+      // its death beat read "the name at the top of the sheet is still NORA";
+      // #528 §1 says the house rubbed her name out of every record it kept. The
+      // console is the room's live record, so it loses the name — and blank is
+      // the right call on mechanics before it is right on canon: a lit display
+      // showing IRIS is a free, zero-risk third source of `who`, and the whole
+      // attention design (#528 §6) rests on `who` being scarce enough that not
+      // looking up is what gets the unit killed.
+      //
+      // The console cannot carry the pressure the way paper and icing do — a
+      // display has no indentation — so its version of the scar is a field that
+      // posts nothing while the frame counter keeps advancing under it. The
+      // machine keeps the child's schedule and does not know who the child is.
       visual: ({ state }) =>
         state.flags[SCENARIO_FLAGS.powerCutPerformed] === true
           ? 'The console is dark and the lane lights are dark. It continues to post frames. The header field where a name would be posted is blank. ' +
@@ -358,14 +391,29 @@ export const ROOM_DESCRIPTIONS: Record<string, Record<string, SubjectDescription
         'The frame counter advances without any score being entered.'
     },
     party_table: {
+      // The cake carried the name at encode time — `iced IRIS · 7`. Corrected in
+      // #546. The name is the `who` dimension, and #528 §6 spends the whole
+      // attention design on `who` being scarce: one anchor overhead in silence,
+      // one inside the machine. A cake that says IRIS is a third source, free
+      // and safe, on a native object — it collapses the reason to look up and it
+      // hands the player a name the gate cannot accept, which is the worst
+      // bounce in the slice ("I told you her name, it's on the cake").
+      //
+      // What replaces it is better content anyway: every native thing in this
+      // room keeps the quantity and loses the name — seven candles, eight
+      // plates, six rows and five names, a blank console header. Icing is the
+      // best substrate in the game for *the erasure leaves the pressure*, and
+      // the four-letter count lands on `touch`, where the height marks and the
+      // scorecard put theirs.
       visual: ({ state }) =>
         'A folding table is set with a cake, seven unlit candles, eight paper plates, and a row of tied paper favor bags. ' +
-        'The cake is iced IRIS · 7. No plate has been used.' +
+        'The cake is iced with a single numeral, 7. The icing to the left of the numeral is scraped flat. No plate has been used.' +
         (state.flags[SCENARIO_FLAGS.favorBagOpened] === true
           ? ' One bag is open. Its contents are set out beside it.'
           : ''),
       touch: () =>
-        'The icing is firm and the candles are unlit and unbent. The favor bags are tied at the neck and each holds the same three objects.'
+        'The icing is firm and the candles are unlit and unbent. The scraped area holds the troughs of four letters. ' +
+        'The favor bags are tied at the neck and each holds the same three objects.'
     },
     party_scorecard: {
       visual: () =>
@@ -536,17 +584,35 @@ export const PORTABLE_DESCRIPTIONS: Record<string, SubjectDescriptions> = {
     touch: () => 'The blue thread is dry, flexible, and under no tension.'
   },
   crayon_drawing: {
-    // The last sentence is the whole provenance system in one clause, and it
-    // has to invert in the bedroom: a drawing that corresponds to nothing in
-    // four rooms and to everything in the fifth is the confirmation the player
-    // spent the run assembling. Branching on where the unit is standing rather
-    // than on whether the paper is back on the wall — the correspondence is
-    // true the moment it is carried through the door.
+    // Two independent branches, and they compose (#547, ITEM 2 and ITEM 5).
+    //
+    // **What the paper still shows** branches on the Act I tear. The drawn bed
+    // went with the fourth corner and stayed on the refrigerator door; a sensor
+    // enumerating a sheet of paper does not list a feature that is no longer on
+    // it. Continuity, not a second callback — the tear still *lands* exactly
+    // once, in the restoration text (#531 §1.3).
+    //
+    // **The load-bearing clause** inverts in the bedroom, and it inverts *with
+    // one exception*, because the ladder of lines beside the frame is precisely
+    // the feature this room does not have yet. A bare "every feature
+    // corresponds" would be a false measurement taken in front of a bare frame,
+    // and it would spend the ending: a room already complete has nothing left
+    // to restore. The exception is the drawing corroborating the frame's own
+    // assessment from the other side, which is the provenance verb firing.
+    //
+    // The branch is on the room the unit is standing in, not on whether the
+    // paper is back on the wall: correspondence is a fact about the drawing and
+    // the room, and you check it *before* you commit to it. The paper is only
+    // describable when carried or co-located, so this can never fire about a
+    // drawing left in another room.
     visual: ({ state }) =>
-      'The drawing is on lined paper in orange wax crayon. It shows a bed beneath a window, walls covered in small stars, a lamp on a low table, ' +
-      'and a door frame with a ladder of short horizontal lines ruled beside it. ' +
+      (state.flags[SCENARIO_FLAGS.crayonDrawingTorn] === true
+        ? 'The drawing is on lined paper in orange wax crayon, with one corner torn away. It shows walls covered in small stars, ' +
+          'a lamp on a low table, and a door frame with a ladder of short horizontal lines ruled beside it. '
+        : 'The drawing is on lined paper in orange wax crayon. It shows a bed beneath a window, walls covered in small stars, ' +
+          'a lamp on a low table, and a door frame with a ladder of short horizontal lines ruled beside it. ') +
       (state.locationId === LOCATION_IDS.irisBedroom
-        ? 'Every feature in the drawing corresponds to a feature of this room.'
+        ? 'Every feature in the drawing corresponds to a feature of this room except one: the ladder of lines ruled beside the door frame.'
         : 'No feature in the drawing corresponds to a feature of this room.'),
     touch: ({ state }) =>
       state.flags[SCENARIO_FLAGS.crayonDrawingTorn] === true
