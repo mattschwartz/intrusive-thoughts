@@ -235,17 +235,43 @@ describe('the shipped room registry', () => {
   it('labels every subject the player can be shown', () => {
     // `PlayerSceneView` renders observations by label. An unlabelled subject
     // reaches the player as a raw engine id.
+    //
+    // Labels only — **not** descriptions. An interaction target does not have
+    // to be observable in the room that offers the interaction: the bedroom
+    // offers `put_back` on the four native anchors precisely so that trying it
+    // can fail with #528 §7's provenance error, and those four are describable
+    // in the rooms they belong to and nowhere else. That is the content, not a
+    // gap. Room *subjects* are held to the stronger standard by the test above.
     for (const room of Object.values(ROOMS)) {
-      const state = { ...stateWithFlags({}), locationId: room.id }
       const subjects = [
         ...room.subjectIds,
         ...room.interactions.map(({ targetId }) => targetId)
       ]
       for (const subjectId of subjects) {
         expect(subjectLabel(subjectId)).not.toBe(subjectId)
-        expect(Object.keys(subjectDescriptions(state, subjectId) ?? {})).not.toEqual(
-          []
+      }
+    }
+  })
+
+  it('advertises no interaction the current room cannot resolve, in any room', () => {
+    // The pairs a room declares are the pairs its tool description advertises,
+    // so every one of them must reach a resolver and produce a real answer —
+    // success or an authored refusal, never the generic "not present" miss that
+    // a bare object-presence check would give the four native anchors.
+    for (const room of Object.values(ROOMS)) {
+      const state = { ...stateWithFlags({}), locationId: room.id }
+      for (const interaction of room.interactions) {
+        const result = makeDeterministicEngine().executeTool(
+          state,
+          {
+            callId: `call-${interaction.targetId}-${interaction.action}`,
+            name: 'interact',
+            arguments: { target: interaction.targetId, action: interaction.action }
+          },
+          { turnId: 'turn-1', requestId: 'request-1' }
         )
+        expect(result.modelResult).not.toContain('not present or available')
+        expect(result.modelResult).not.toContain('not physically supported')
       }
     }
   })

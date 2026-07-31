@@ -24,8 +24,6 @@ import {
   textDelta,
   type FakeModelRound
 } from './fake-model-gateway'
-import { findTestAddressThreshold } from './provenance-cases'
-
 const FIXTURE_TIMESTAMP = '2026-07-27T20:00:00.000Z'
 
 export function scriptedTextRound(
@@ -250,9 +248,7 @@ export async function createScriptedIntegrationHarness(options: {
   limits?: AgentLoopOptions['limits']
   onPersistedEvent?: (event: KnownGameEvent) => void
   judge?: FakeJudgeGateway
-  /** Opt in to the synthetic addressable threshold. See provenance-cases. */
-  addressable?: boolean
-  /** Stands in for acts the shipped content does not carry yet. */
+  /** Places the run somewhere other than the opening state — an act in. */
   stateTransform?: (state: GameState) => GameState
 }): Promise<ScriptedIntegrationHarness> {
   const dataRoot =
@@ -263,10 +259,7 @@ export async function createScriptedIntegrationHarness(options: {
   let worldEvent = 0
   const engine = createScenarioEngine({
     now: () => FIXTURE_TIMESTAMP,
-    createEventId: ({ type }) => `world-${++worldEvent}-${type}`,
-    ...(options.addressable
-      ? { findAddressThreshold: findTestAddressThreshold }
-      : {})
+    createEventId: ({ type }) => `world-${++worldEvent}-${type}`
   })
   let state = engine.createInitialState(runId, variant)
   state = options.stateTransform?.(state) ?? state

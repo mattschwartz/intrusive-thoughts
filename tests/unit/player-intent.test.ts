@@ -3,12 +3,14 @@ import { describe, expect, it } from 'vitest'
 import {
   INTENT_PHRASES,
   PLAYER_INTENT_MATCHER_VERSION,
-  disclosureWindowOpen,
   interpretPlayerTurn,
   matchPlayerIntents
 } from '../../src/main/world/intent'
 import { reduceGameEvent } from '../../src/main/world/reducer'
-import { axisRuleOccurrences } from '../../src/main/world/relationship'
+import {
+  axisRuleOccurrences,
+  disclosureWindowOpen
+} from '../../src/main/world/relationship'
 import {
   LOCATION_IDS,
   PENDING_FLAGS,

@@ -5,8 +5,22 @@ export const SCENARIO_VERSION = 'kitchen-presumed-v1'
 export const LOCATION_IDS = {
   kitchen: 'kitchen_presumed',
   bowlingAlley: 'bowling_alley_arranged',
-  upstairsHall: 'upstairs_hall'
+  upstairsHall: 'upstairs_hall',
+  /**
+   * The same string as `PROVENANCE_IDENTITY_IDS.irisBedroom`, and deliberately
+   * so: the identity the player reconstructs *is* the room they walk into. The
+   * two are declared separately because `provenance.ts` imports this module and
+   * not the other way round; a test holds them equal.
+   */
+  irisBedroom: 'iris_bedroom'
 } as const
+
+/**
+ * Where the disclosure window closes (#530 §5.3). Named rather than inlined
+ * because the rule that reads it lives in the relationship module, which has no
+ * business knowing which room Act III begins in — only that one does.
+ */
+export const DISCLOSURE_WINDOW_CLOSES_AT = LOCATION_IDS.upstairsHall
 
 export const OBJECT_IDS = {
   cup: 'ceramic_cup',
@@ -45,6 +59,16 @@ export const SUBJECT_IDS = {
    * branch's fairness precondition reads (#529 §5.2).
    */
   machineCycle: 'machine_cycle',
+  // Act III-A (#531 §2.2). The hall holds no anchors: everything the address
+  // needs was gathered before arrival, and putting evidence at the address
+  // surface would let a player complete a case after committing to it.
+  hallWindow: 'hall_window',
+  bedroomDoor: 'bedroom_door',
+  // Act III-B (#531 §3.2). `bedroom_window` rather than `window`, which is the
+  // kitchen's interior pane; this is the first daylight in the game.
+  bedroomWindow: 'bedroom_window',
+  bed: 'bed',
+  doorFrame: 'door_frame',
   ...OBJECT_IDS
 } as const
 
@@ -59,7 +83,16 @@ export const INTERACT_ACTIONS = {
   cutPower: 'cut_power',
   retrieveWithPinRake: 'retrieve_with_pin_rake',
   takeByHand: 'take_by_hand',
-  reachInAndTake: 'reach_in_and_take'
+  reachInAndTake: 'reach_in_and_take',
+  /**
+   * Act III-B. The Assign-provenance verb performed on an object, one final
+   * time. Every `put_back` of a *displaced* anchor succeeds — restoration is a
+   * consequence, not a second test (#531 §3.3) — and every `put_back` of a
+   * native one fails with the authored provenance error, which is the only
+   * place in the slice that says out loud what the whole spine is for.
+   */
+  putBack: 'put_back',
+  restoreTheFrame: 'restore_the_frame'
 } as const
 
 export const SCENARIO_FLAGS = {
@@ -90,15 +123,42 @@ export const SCENARIO_FLAGS = {
   pitReachAttempted: 'pitReachAttempted',
   actTwoComplete: 'actTwoComplete',
   hallRoomObserved: 'hallRoomObserved',
+  /**
+   * The disclosure beat's scoring slip has been delivered (#530 §5.4). It rides
+   * one cycle only: the room reads the agent's mind once, and a receipt that
+   * reprinted every third action would read as a loop rather than as a fact.
+   */
+  scoringSlipDelivered: 'scoringSlipDelivered',
+  /**
+   * Act III-B arrival (#531 §5.3). There is deliberately no companion
+   * `bedroomDoorOpened`: the door's opened state already has exactly one home,
+   * `thresholdOpenedFlag(THRESHOLD_IDS.bedroomDoor)`, written by the validator
+   * and read by the passage. A second flag for the same fact is a drift waiting
+   * to happen, and #538 can read the derived one.
+   */
+  bedroomEntered: 'bedroomEntered',
+  // The four returns (#531 §5.3). #538 reads these to report how complete the
+  // restoration was, and §4.2's "not restored" lines are assembled from them.
+  drawingRestored: 'drawingRestored',
+  nightLightRestored: 'nightLightRestored',
+  bannerRestored: 'bannerRestored',
+  favorRestored: 'favorRestored',
   /** The room's own fact about the death (#529 §9.5, architecture §5). */
   agentDestroyedInPinsetter: 'agentDestroyedInPinsetter',
   /**
-   * The slice-wide ending flag, so #538 can classify an ending without knowing
-   * which room it happened in. Pairs with `endedInRestoration` (#537).
+   * The two slice-wide ending flags, so #538 can classify an ending without
+   * knowing which room it happened in.
    */
   endedInDeath: 'endedInDeath',
+  endedInRestoration: 'endedInRestoration',
   voiceDisclosedHearing: 'voiceDisclosedHearing',
-  voiceDeniedHearing: 'voiceDeniedHearing'
+  voiceDeniedHearing: 'voiceDeniedHearing',
+  /**
+   * The third disclosure outcome, and the only one the *engine* records rather
+   * than the player: the window closed at Act III entry with neither answer
+   * given (#530 §5.5). Set beside `hon.silence_at_close`, never without it.
+   */
+  voiceSilentOnHearing: 'voiceSilentOnHearing'
 } as const
 
 /**

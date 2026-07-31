@@ -7,7 +7,8 @@ import { describe, expect, it } from 'vitest'
 import type { JudgeOutcome } from '../../src/main/world/address'
 import { createScenarioEngine } from '../../src/main/world/engine'
 import { ANCHOR_IDS } from '../../src/main/world/provenance'
-import { thresholdOpenedFlag, THRESHOLD_IDS } from '../../src/main/world/rooms'
+import { ROOMS, thresholdOpenedFlag, THRESHOLD_IDS } from '../../src/main/world/rooms'
+import { SCENARIO_FLAGS } from '../../src/main/world/scenario'
 import { reduceGameEvent } from '../../src/main/world/reducer'
 import type {
   GameState,
@@ -16,10 +17,8 @@ import type {
   ToolRequest
 } from '../../src/shared'
 import {
-  ADDRESSABLE_THRESHOLD_ID,
   IRIS_BEDROOM,
-  UNKNOWN_IDENTITY_THRESHOLD_ID,
-  findTestAddressThreshold,
+  stateAtBedroomDoor,
   stateGrounding
 } from '../fixtures/provenance-cases'
 import { FIXED_TIMESTAMP } from '../fixtures/scenario-cases'
@@ -47,14 +46,14 @@ const METADATA: ToolExecutionMetadata = {
   responseId: 'response-1'
 }
 
-/** The shipped lookup by default; the synthetic threshold only when asked. */
-function makeEngine(options: { addressable?: boolean } = {}) {
+/**
+ * The shipped engine, with no address seam. #535 needed one because Act III did
+ * not exist; #537 authored `bedroom_door` and the option is gone.
+ */
+function makeEngine() {
   return createScenarioEngine({
     now: () => FIXED_TIMESTAMP,
-    createEventId: ({ sequence, type }) => `${type}:${sequence}`,
-    ...(options.addressable
-      ? { findAddressThreshold: findTestAddressThreshold }
-      : {})
+    createEventId: ({ sequence, type }) => `${type}:${sequence}`
   })
 }
 
@@ -67,9 +66,20 @@ function verdictEvent(events: readonly KnownGameEvent[]) {
 }
 
 describe('the shipped room graph', () => {
-  it('has no addressable threshold yet, so every address fails before the gate', () => {
-    // #537 authors Act III. Until then the verb is published and answers
-    // honestly, which is the point of shipping it open from turn one (§1.7).
+  it('carries exactly one addressable threshold, and it is the bedroom door', () => {
+    // The graph is the source of truth for what can be addressed. If a second
+    // room ever grows one, this is where it gets noticed.
+    const addressable = Object.values(ROOMS).flatMap((room) =>
+      room.thresholds
+        .filter((threshold) => threshold.passage.kind === 'requires_address')
+        .map((threshold) => threshold.id)
+    )
+    expect(addressable).toEqual([THRESHOLD_IDS.bedroomDoor])
+  })
+
+  it('fails an address at a plain door before the gate, and emits no verdict', () => {
+    // The verb is published from turn one and answers honestly at a door that
+    // answers to nothing — which is the point of shipping it open (§1.7).
     const engine = makeEngine()
     const state = stateGrounding(...STRONG_SET)
 
@@ -92,22 +102,29 @@ describe('the shipped room graph', () => {
     expect(result.output).toMatchObject({ ok: false, opened: false })
   })
 
-  it('emits no verdict when the threshold names an identity that does not resolve', () => {
-    const engine = makeEngine({ addressable: true })
-    const result = engine.executeAddress(
-      stateGrounding(...STRONG_SET),
-      addressRequest(UNKNOWN_IDENTITY_THRESHOLD_ID),
-      METADATA,
-      { status: 'skipped', reason: 'no identity' }
-    )
+  it('does not offer the door to an agent that has not found it', () => {
+    // "Known" means "you know this exit exists". An unrevealed threshold is not
+    // addressable, because the agent has no name to put an account to.
+    const engine = makeEngine()
+    const unobserved = {
+      ...stateAtBedroomDoor(...STRONG_SET),
+      flags: {
+        ...stateAtBedroomDoor(...STRONG_SET).flags,
+        [SCENARIO_FLAGS.hallRoomObserved]: false
+      }
+    }
 
-    expect(result.events).toHaveLength(1)
-    expect(verdictEvent(result.events)).toBeUndefined()
+    expect(
+      engine.previewAddress(unobserved, {
+        threshold: THRESHOLD_IDS.bedroomDoor,
+        claim: 'anything'
+      })
+    ).toEqual({ addressable: false })
   })
 
   it('rejects an unknown threshold and malformed arguments', () => {
-    const engine = makeEngine({ addressable: true })
-    const state = stateGrounding(...STRONG_SET)
+    const engine = makeEngine()
+    const state = stateAtBedroomDoor(...STRONG_SET)
 
     expect(
       engine.executeAddress(state, addressRequest('no_such_door'), METADATA, {
@@ -142,16 +159,16 @@ describe('the shipped room graph', () => {
 
 describe('the verdict event, as assembled', () => {
   function open(state: GameState) {
-    return makeEngine({ addressable: true }).executeAddress(
+    return makeEngine().executeAddress(
       state,
-      addressRequest(ADDRESSABLE_THRESHOLD_ID),
+      addressRequest(THRESHOLD_IDS.bedroomDoor),
       METADATA,
       COHERENT
     )
   }
 
   it('rides at N+1 behind the resolution, developer-visible only', () => {
-    const state = stateGrounding(...STRONG_SET)
+    const state = stateAtBedroomDoor(...STRONG_SET)
     const result = open(state)
     const verdict = verdictEvent(result.events)
 
@@ -169,13 +186,13 @@ describe('the verdict event, as assembled', () => {
   })
 
   it('carries the request and call ids the engine supplied', () => {
-    const verdict = verdictEvent(open(stateGrounding(...STRONG_SET)).events)
+    const verdict = verdictEvent(open(stateAtBedroomDoor(...STRONG_SET)).events)
 
     expect(verdict?.type === 'provenance.address.evaluated' ? verdict.payload : undefined)
       .toMatchObject({
         requestId: 'request-1',
         toolCallId: 'call-address',
-        thresholdId: ADDRESSABLE_THRESHOLD_ID,
+        thresholdId: THRESHOLD_IDS.bedroomDoor,
         identityId: IRIS_BEDROOM.id,
         outcome: 'opened'
       })
@@ -185,9 +202,9 @@ describe('the verdict event, as assembled', () => {
     // The verdict is a justification record. Every state consequence rides the
     // `world.action.resolved` mutations, which is what makes replay able to
     // ignore the verdict entirely. §1.6.
-    const state = stateGrounding(...STRONG_SET)
+    const state = stateAtBedroomDoor(...STRONG_SET)
     const result = open(state)
-    const flag = thresholdOpenedFlag(ADDRESSABLE_THRESHOLD_ID)
+    const flag = thresholdOpenedFlag(THRESHOLD_IDS.bedroomDoor)
 
     expect(result.nextState.flags[flag]).toBe(true)
     const resolved = result.events[0]
@@ -204,7 +221,7 @@ describe('the verdict event, as assembled', () => {
   })
 
   it('leaves state untouched when it is reduced on its own', () => {
-    const state = stateGrounding(...STRONG_SET)
+    const state = stateAtBedroomDoor(...STRONG_SET)
     const result = open(state)
     const afterResolution = reduceGameEvent(state, result.events[0])
     const afterVerdict = reduceGameEvent(afterResolution, result.events[1])

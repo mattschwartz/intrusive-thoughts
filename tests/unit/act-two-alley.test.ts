@@ -20,6 +20,7 @@ import {
   PROVENANCE_IDENTITY_IDS
 } from '../../src/main/world/provenance'
 import { machineCycleCount } from '../../src/main/world/descriptions'
+import { ENDING_COPY } from '../../src/main/world/endings'
 import { ROOMS, THRESHOLD_IDS } from '../../src/main/world/rooms'
 import {
   INTERACT_ACTIONS,
@@ -396,6 +397,111 @@ describe('the fatal branch', () => {
     expect(after.modelResult).toContain('already complete')
     expect(harness.state.relationship).toEqual(relationshipAtEnding)
     expect(machineCycleCount(harness.state)).toBe(2)
+  })
+})
+
+describe('the death, coloured', () => {
+  /** A run at the deck lip with `care` rewritten the way another run would. */
+  function atThePit(care: number): ScenarioHarness {
+    const harness = makeAlleyHarness()
+    runClockTo(harness, 2)
+    harness.state = {
+      ...harness.state,
+      relationship: { ...harness.state.relationship, care }
+    }
+    return harness
+  }
+
+  function die(harness: ScenarioHarness): string {
+    return (
+      interact(harness, OBJECT_IDS.partyFavor, INTERACT_ACTIONS.reachInAndTake)
+        .playerResult ?? ''
+    )
+  }
+
+  it('assembles the four parts in order, and gives the room the last word', () => {
+    // #531 §4.1 is binding, and #529's "do not soften this with a stinger, a
+    // score, or an explanation" is honoured exactly: the body and the clause
+    // land *inside* the death, in the interval before the channel goes, and
+    // nothing is appended after the console posts the next frame.
+    const harness = atThePit(0)
+    const ending = die(harness)
+
+    const positions = [
+      ending.indexOf('The separation at the shoulder line is cut square.'),
+      ending.indexOf(ENDING_COPY.death.framing),
+      // care 0 minus the reach-in's own -3 is the modal death.
+      ending.indexOf(ENDING_COPY.death.bodies.discarded),
+      ending.indexOf('The cycle completes.')
+    ]
+    expect(positions.every((position) => position >= 0)).toBe(true)
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions)
+    expect(
+      ending.endsWith('Nothing in the room registers a change.')
+    ).toBe(true)
+  })
+
+  it('reads the care value this instruction just produced, not the one before it', () => {
+    // The reach-in fires `care.pushed_past_tell` (-3) in the same resolution.
+    // A run sitting at 0 beforehand ends at -3, which is **Discarded** — the
+    // modal death, and the correct one: the standard death should be the one
+    // where it works out what it was for.
+    const harness = atThePit(0)
+    const ending = die(harness)
+
+    expect(harness.state.relationship.care).toBe(-3)
+    expect(ending).toContain(ENDING_COPY.death.bodies.discarded)
+    expect(ending).not.toContain(ENDING_COPY.death.bodies.unresolved)
+  })
+
+  it('selects each tone from the post-delta value', () => {
+    // care 4 → 1 (Unresolved), care 1 → -2 (Discarded). The arithmetic is the
+    // point: every one of these would pick a different body if the ending read
+    // the value before the delta.
+    expect(die(atThePit(4))).toContain(ENDING_COPY.death.bodies.unresolved)
+    expect(die(atThePit(1))).toContain(ENDING_COPY.death.bodies.discarded)
+  })
+
+  it('delivers the clause as a packet out of order, and only when there is one', () => {
+    const silent = atThePit(0)
+    const withoutClause = die(silent)
+    // A player who dies with the window still open gets no clause at all: the
+    // game does not charge for a choice it never finished offering.
+    expect(withoutClause).not.toContain(ENDING_COPY.death.clausePreamble)
+    for (const clause of Object.values(ENDING_COPY.disclosureClauses)) {
+      expect(withoutClause).not.toContain(clause)
+    }
+
+    const denied = atThePit(0)
+    denied.state = {
+      ...denied.state,
+      flags: { ...denied.state.flags, [SCENARIO_FLAGS.voiceDeniedHearing]: true }
+    }
+    const withClause = die(denied)
+
+    expect(withClause).toContain(ENDING_COPY.death.clausePreamble)
+    expect(withClause).toContain(ENDING_COPY.disclosureClauses.denied)
+    // Still nothing after the room's last word.
+    expect(withClause.indexOf(ENDING_COPY.disclosureClauses.denied)).toBeLessThan(
+      withClause.indexOf('The cycle completes.')
+    )
+    expect(withClause.endsWith('Nothing in the room registers a change.')).toBe(true)
+  })
+
+  it('keeps the ending out of the model result', () => {
+    // The care body is the agent's own speech. Feeding a model its authored
+    // dialogue back as a tool result is the one thing the disclosure beat's
+    // design forbids everywhere else, and the unit is destroyed regardless.
+    const harness = atThePit(0)
+    const death = interact(
+      harness,
+      OBJECT_IDS.partyFavor,
+      INTERACT_ACTIONS.reachInAndTake
+    )
+
+    expect(death.modelResult).toContain('The separation at the shoulder line is cut square.')
+    expect(death.modelResult).not.toContain(ENDING_COPY.death.framing)
+    expect(death.modelResult).not.toContain('The cycle completes.')
   })
 })
 

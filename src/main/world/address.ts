@@ -36,7 +36,11 @@ import {
 } from './provenance'
 import { applyWorldMutation } from './reducer'
 import { axisRuleMutations } from './relationship'
-import { thresholdOpenedFlag, type ThresholdDefinition } from './rooms'
+import {
+  THRESHOLD_IDS,
+  thresholdOpenedFlag,
+  type ThresholdDefinition
+} from './rooms'
 import {
   failedToolResolution,
   toolGateFailure,
@@ -158,6 +162,44 @@ export const ADDRESS_BOUNCE_COPY = {
   incoherentNoTarget:
     'I put that to it and it did not take it as a claim about the room. It wants me to say what is behind the door, and then why I say so.'
 } as const
+
+/**
+ * What the door says when it takes the account. Authored per threshold, keyed
+ * by threshold id, because this is the payoff of the whole spine and a line
+ * that interpolates a label is engine chrome at the emotional climax.
+ *
+ * Register note, since it recurs: a **bounce** is in the agent's voice, because
+ * a bounce carries a message the agent has to relay. An **acceptance** is
+ * second-person world-report like every other resolution, because the door has
+ * nothing to say once it is satisfied. And the door does not swing — the
+ * measurement simply comes back different, which is the same elided-interval
+ * idiom as the window injury's ungained second.
+ *
+ * `bedroom_door`'s line spends the empty nameplate recess #531 §2.2 put at eye
+ * height. It is not an oracle: `who` is grounded only by the banner or the
+ * favor bag, both of which carry the lettering, so a player who has opened this
+ * door necessarily already has the name in their transcript.
+ */
+export const ADDRESS_ACCEPTED_COPY: Readonly<Record<string, string>> = {
+  [THRESHOLD_IDS.bedroomDoor]:
+    'You put the account to the door. The recess at eye height is not empty: it holds a plate of varnished pine, ' +
+    'four centimetres by twelve, lettered IRIS, screwed into the two holes that were already there. ' +
+    'The door is standing open. Nothing is recorded between the closed state and this one.'
+}
+
+/**
+ * The line for a threshold with no authored one. Ratified rather than replaced:
+ * `takes` is the idiom the bounce copy already uses for this door ("It didn't
+ * take hold of anything", "It has taken both of those as true"), and "is no
+ * longer closed" is a state report rather than a transition, which is the
+ * house's own idiom.
+ */
+export function renderAddressAccepted(threshold: ThresholdDefinition): string {
+  return (
+    ADDRESS_ACCEPTED_COPY[threshold.id] ??
+    `You put the account to the ${threshold.label}. It takes it. The ${threshold.label} is no longer closed.`
+  )
+}
 
 /** "a, b, and c" — the joining #531 §2.4's read-back specifies. */
 function joinLabels(labels: readonly string[]): string {
@@ -356,10 +398,7 @@ export function resolveAddress(
 
   const openedFlag = thresholdOpenedFlag(threshold.id)
   const message = opened
-    ? // TODO(#537): #531 authors the hall, the door and the ending, but no line
-      // for the moment the door accepts an account. Structural placeholder in
-      // the engine's own register; replace it when Act III lands.
-      `You put the account to the ${threshold.label}. It takes it. The ${threshold.label} is no longer closed.`
+    ? renderAddressAccepted(threshold)
     : renderAddressBounce(gate, judge, bounceReason)
 
   return {

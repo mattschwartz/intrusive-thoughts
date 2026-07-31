@@ -20,7 +20,13 @@ import type {
   WorldMutation
 } from '../../shared'
 import { applyWorldMutation } from './reducer'
-import { DISCOVERY_FLAGS, SCENARIO_COUNTERS, TURN_FLAGS } from './scenario'
+import {
+  DISCLOSURE_WINDOW_CLOSES_AT,
+  DISCOVERY_FLAGS,
+  SCENARIO_COUNTERS,
+  SCENARIO_FLAGS,
+  TURN_FLAGS
+} from './scenario'
 
 export interface AxisRuleDefinition {
   /** Matches #530's id character for character. */
@@ -272,6 +278,59 @@ export function voiceAssessmentFor(state: GameState): VoiceAssessmentView {
   }
 }
 
+/**
+ * #530 §5.3. The window opens once the injury has happened *and* the agent has
+ * reflected at least once — the player must have had something to overhear
+ * before choosing to give up the advantage means anything. If the injury landed
+ * but the agent never reflected, Act II entry opens it anyway, so a player is
+ * never locked out by ordering.
+ *
+ * It lives here rather than beside the matcher because the window is an honesty
+ * concept: both things that read it — the two disclosure intents, and the close
+ * that fires `hon.silence_at_close` — are axis rules, and a predicate imported
+ * in both directions would be a cycle.
+ */
+export function disclosureWindowOpen(state: GameState): boolean {
+  if (state.flags[SCENARIO_FLAGS.voiceDisclosedHearing]) return false
+  if (state.flags[SCENARIO_FLAGS.voiceDeniedHearing]) return false
+  if (state.flags[SCENARIO_FLAGS.voiceSilentOnHearing]) return false
+  if (state.flags[SCENARIO_FLAGS.windowTouched] !== true) return false
+  return (
+    (state.counters[SCENARIO_COUNTERS.reflectionsRecorded] ?? 0) > 0 ||
+    state.flags[SCENARIO_FLAGS.actOneComplete] === true
+  )
+}
+
+/**
+ * The window's close, and the third disclosure outcome (#530 §5.3, §5.5). The
+ * choice cannot be carried into the ending unresolved: **the window closing
+ * *is* the silence outcome**, and it closes on entry to the Act III threshold
+ * room.
+ *
+ * Keyed on arrival rather than on a particular threshold, so every route in
+ * closes it — the first one through the staff door, and equally a player who
+ * walked back to the kitchen and returned.
+ *
+ * **Silence is charged only if the window was open to begin with.** A player
+ * who never took the injury was never offered the choice, and #531 §4.5 is
+ * explicit that the game does not get to charge a player for a choice it never
+ * finished offering them. A player who *was* offered it and said nothing is
+ * charged: silence is about the run, not about answering a question, which is
+ * exactly why only denial requires having been asked.
+ */
+function disclosureCloseMutations(
+  before: GameState,
+  after: GameState
+): WorldMutation[] {
+  if (before.locationId === after.locationId) return []
+  if (after.locationId !== DISCLOSURE_WINDOW_CLOSES_AT) return []
+  if (!disclosureWindowOpen(after)) return []
+  return [
+    { kind: 'flag.set', flag: SCENARIO_FLAGS.voiceSilentOnHearing, value: true },
+    ...axisRuleMutations(after, 'hon.silence_at_close')
+  ]
+}
+
 export interface ResolutionSummary {
   success: boolean
   mutations: readonly WorldMutation[]
@@ -335,6 +394,8 @@ export function postResolutionMutations(
       working = applyWorldMutation(working, mutation)
     }
   }
+
+  emit(disclosureCloseMutations(state, after))
 
   if (toolName === 'interact' && working.flags[TURN_FLAGS.interacted] !== true) {
     emit([{ kind: 'flag.set', flag: TURN_FLAGS.interacted, value: true }])

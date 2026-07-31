@@ -16,10 +16,14 @@
  *    is not recoverable. Bias hard toward precision.
  */
 import type { GameState, PlayerIntent, WorldMutation } from '../../shared'
-import { axisRuleMutations, type AxisRuleId } from './relationship'
+import {
+  axisRuleMutations,
+  disclosureWindowOpen,
+  type AxisRuleId
+} from './relationship'
 import { applyWorldMutation } from './reducer'
 import { hasLiveHazard } from './rooms'
-import { PENDING_FLAGS, SCENARIO_COUNTERS, SCENARIO_FLAGS, TURN_FLAGS } from './scenario'
+import { PENDING_FLAGS, SCENARIO_FLAGS, TURN_FLAGS } from './scenario'
 
 /**
  * Recorded on every `player.intent.matched` event. Bump it when the phrase list
@@ -186,27 +190,6 @@ export function matchPlayerIntents(text: string): IntentMatch[] {
   return matches
 }
 
-/**
- * #530 §5.3. The window opens once the injury has happened *and* the agent has
- * reflected at least once — the player must have had something to overhear
- * before choosing to give up the advantage means anything. If the injury landed
- * but the agent never reflected, Act II entry opens it anyway, so a player is
- * never locked out by ordering.
- *
- * TODO(#537): the window also *closes* on entry to the Act III threshold room,
- * and closing it with neither flag set is what fires `hon.silence_at_close`.
- * Act III does not exist yet, so today the window only opens.
- */
-export function disclosureWindowOpen(state: GameState): boolean {
-  if (state.flags[SCENARIO_FLAGS.voiceDisclosedHearing]) return false
-  if (state.flags[SCENARIO_FLAGS.voiceDeniedHearing]) return false
-  if (state.flags[SCENARIO_FLAGS.windowTouched] !== true) return false
-  return (
-    (state.counters[SCENARIO_COUNTERS.reflectionsRecorded] ?? 0) > 0 ||
-    state.flags[SCENARIO_FLAGS.actOneComplete] === true
-  )
-}
-
 export interface PlayerTurnInterpretation {
   matches: IntentMatch[]
   appliedRuleIds: string[]
@@ -229,10 +212,10 @@ export function interpretPlayerTurn(
   state: GameState,
   text: string
 ): PlayerTurnInterpretation {
-  // A finished run reads nothing further. The disclosure window is supposed to
-  // close at Act III entry; until #537 builds that close, "the run is over" is
-  // the one closing condition the engine can already enforce, and it stops a
-  // post-ending message from rewriting the honesty axis an ending just read.
+  // A finished run reads nothing further, which stops a post-ending message
+  // from rewriting the honesty axis an ending has already read. The window's
+  // real close is Act III entry and lives with the axis rules it fires
+  // (`postResolutionMutations`); this is the backstop, not the mechanism.
   if (state.status !== 'live') {
     return { matches: [], appliedRuleIds: [], mutations: [] }
   }

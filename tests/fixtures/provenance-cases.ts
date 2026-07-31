@@ -3,8 +3,12 @@ import {
   PROVENANCE_IDENTITIES,
   PROVENANCE_IDENTITY_IDS
 } from '../../src/main/world/provenance'
-import { findThreshold, type ThresholdDefinition } from '../../src/main/world/rooms'
-import { LOCATION_IDS } from '../../src/main/world/scenario'
+import {
+  ROOMS,
+  THRESHOLD_IDS,
+  type ThresholdDefinition
+} from '../../src/main/world/rooms'
+import { LOCATION_IDS, SCENARIO_FLAGS } from '../../src/main/world/scenario'
 import type {
   GameState,
   ObservationModality,
@@ -72,31 +76,32 @@ export function stateGrounding(...anchorIds: string[]): GameState {
 }
 
 /**
- * A `requires_address` threshold, because the shipped room graph carries none
- * until #537 authors Act III and the verdict path has to be exercisable end to
- * end before then. Injected through `ScenarioEngineOptions.findAddressThreshold`,
- * the same kind of seam `createEventId` and `now` already are.
+ * The slice's one addressable threshold, taken from the shipped graph rather
+ * than synthesised. #535 could not do this — Act III did not exist, so the
+ * address path was exercised through an injected
+ * `ScenarioEngineOptions.findAddressThreshold`. #537 authored the door and the
+ * seam is gone: test-only code has no business on the hottest correctness path
+ * in the slice.
  */
-export const ADDRESSABLE_THRESHOLD_ID = 'test_reconstruction_door'
-export const UNKNOWN_IDENTITY_THRESHOLD_ID = 'test_orphan_door'
-
-export const ADDRESSABLE_THRESHOLD: ThresholdDefinition = {
-  id: ADDRESSABLE_THRESHOLD_ID,
-  label: 'test reconstruction door',
-  fromRoomId: LOCATION_IDS.kitchen,
-  toRoomId: LOCATION_IDS.kitchen,
-  revealedBy: { kind: 'always' },
-  passage: {
-    kind: 'requires_address',
-    identityId: PROVENANCE_IDENTITY_IDS.irisBedroom,
-    refusal: 'the door opens to an account of what is behind it.'
+export const BEDROOM_DOOR: ThresholdDefinition = (() => {
+  const threshold = ROOMS[LOCATION_IDS.upstairsHall].thresholds.find(
+    (candidate) => candidate.id === THRESHOLD_IDS.bedroomDoor
+  )
+  if (!threshold) {
+    throw new Error('The shipped upstairs hall carries no bedroom door.')
   }
-}
+  return threshold
+})()
 
-/** A threshold that names an identity the registry does not carry. */
+/**
+ * A threshold naming an identity the registry does not carry. Still synthetic,
+ * and deliberately: the shipped graph will never contain one, which is the
+ * property being tested. It is only ever handed to `addressTargetFor`, never
+ * injected into an engine.
+ */
 export const UNKNOWN_IDENTITY_THRESHOLD: ThresholdDefinition = {
-  ...ADDRESSABLE_THRESHOLD,
-  id: UNKNOWN_IDENTITY_THRESHOLD_ID,
+  ...BEDROOM_DOOR,
+  id: 'test_orphan_door',
   label: 'test orphan door',
   passage: {
     kind: 'requires_address',
@@ -106,17 +111,24 @@ export const UNKNOWN_IDENTITY_THRESHOLD: ThresholdDefinition = {
 }
 
 /**
- * Delegates to the real graph for every id but the synthetic ones, so a test
- * using this seam still sees the shipped behaviour for shipped thresholds — an
- * address at the kitchen's service door is still not addressable.
+ * Standing at the bedroom door with the named anchors grounded: the state a run
+ * is in when it reaches the address, minus the walk.
+ *
+ * `hallRoomObserved` is what reveals the door, and revealing it is what makes it
+ * addressable at all — `findThreshold` searches the current room's *revealed*
+ * edges, so an agent that has not looked at the hall cannot address a door it
+ * does not know is there.
  */
-export function findTestAddressThreshold(
-  state: GameState,
-  thresholdId: string
-): ThresholdDefinition | undefined {
-  if (thresholdId === ADDRESSABLE_THRESHOLD_ID) return ADDRESSABLE_THRESHOLD
-  if (thresholdId === UNKNOWN_IDENTITY_THRESHOLD_ID) {
-    return UNKNOWN_IDENTITY_THRESHOLD
+export function stateAtBedroomDoor(...anchorIds: string[]): GameState {
+  const state = stateGrounding(...anchorIds)
+  return {
+    ...state,
+    locationId: LOCATION_IDS.upstairsHall,
+    flags: {
+      ...state.flags,
+      [SCENARIO_FLAGS.actOneComplete]: true,
+      [SCENARIO_FLAGS.actTwoComplete]: true,
+      [SCENARIO_FLAGS.hallRoomObserved]: true
+    }
   }
-  return findThreshold(state, thresholdId)
 }

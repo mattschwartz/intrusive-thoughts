@@ -27,7 +27,7 @@ import {
   type WorldMutation
 } from '../../src/shared'
 import {
-  ADDRESSABLE_THRESHOLD,
+  BEDROOM_DOOR,
   IRIS_BEDROOM,
   UNKNOWN_IDENTITY_THRESHOLD,
   baseState,
@@ -39,10 +39,10 @@ const KITCHEN_DOC = fileURLToPath(
 )
 
 const TARGET: AddressTarget = {
-  threshold: ADDRESSABLE_THRESHOLD,
+  threshold: BEDROOM_DOOR,
   identity: IRIS_BEDROOM
 }
-const OPENED_FLAG = thresholdOpenedFlag(ADDRESSABLE_THRESHOLD.id)
+const OPENED_FLAG = thresholdOpenedFlag(BEDROOM_DOOR.id)
 
 const STRONG_SET = [
   ANCHOR_IDS.crayonDrawing,
@@ -52,7 +52,7 @@ const STRONG_SET = [
 ]
 
 function claim(text = 'This was Iris’s bedroom, and here is why.'): AddressInput {
-  return { threshold: ADDRESSABLE_THRESHOLD.id, claim: text }
+  return { threshold: BEDROOM_DOOR.id, claim: text }
 }
 
 function coherent(overrides: Partial<JudgedOutcome> = {}): JudgeOutcome {
@@ -96,12 +96,12 @@ function verdictOf(resolution: ReturnType<typeof resolveAddress>) {
 
 describe('the address target', () => {
   it('resolves only a threshold that declares an identity the registry carries', () => {
-    expect(addressTargetFor(ADDRESSABLE_THRESHOLD)?.identity).toBe(IRIS_BEDROOM)
+    expect(addressTargetFor(BEDROOM_DOOR)?.identity).toBe(IRIS_BEDROOM)
     expect(addressTargetFor(undefined)).toBeUndefined()
     expect(addressTargetFor(UNKNOWN_IDENTITY_THRESHOLD)).toBeUndefined()
     expect(
       addressTargetFor({
-        ...ADDRESSABLE_THRESHOLD,
+        ...BEDROOM_DOOR,
         passage: { kind: 'open' }
       })
     ).toBeUndefined()
@@ -126,7 +126,7 @@ describe('the gate-then-judge conjunction', () => {
     expect(resolution.output).toMatchObject({
       ok: true,
       opened: true,
-      threshold: ADDRESSABLE_THRESHOLD.id
+      threshold: BEDROOM_DOOR.id
     })
     expect(resolution.mutations).toContainEqual({
       kind: 'flag.set',

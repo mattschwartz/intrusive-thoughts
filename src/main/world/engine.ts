@@ -26,7 +26,7 @@ import {
 } from './address'
 import { resolveAmbient } from './ambient'
 import { interpretPlayerTurn, PLAYER_INTENT_MATCHER_VERSION } from './intent'
-import { findThreshold, type ThresholdDefinition } from './rooms'
+import { findThreshold } from './rooms'
 import {
   projectBodyForAgent,
   projectSceneForPlayer,
@@ -112,22 +112,6 @@ export interface ScenarioEngineOptions {
     type: KnownGameEvent['type']
   }) => string
   now?: () => string
-  /**
-   * Overrides the room-graph lookup the **address path** uses. Defaults to
-   * `findThreshold`, the same lookup `move` traverses with, so there is one
-   * source of truth in the shipped build.
-   *
-   * It exists because the shipped graph carries no `requires_address` threshold
-   * until #537 authors Act III, and the verdict path — gate, judge, event,
-   * replay — has to be exercisable end to end before then. This is the same kind
-   * of seam `createEventId` and `now` already are: deterministic substitution
-   * for tests, real behaviour by default. TODO(#537): drop it once the shipped
-   * graph carries an addressable threshold of its own.
-   */
-  findAddressThreshold?: (
-    state: GameState,
-    thresholdId: string
-  ) => ThresholdDefinition | undefined
 }
 
 const defaultCreateEventId: NonNullable<ScenarioEngineOptions['createEventId']> = () =>
@@ -136,7 +120,6 @@ const defaultCreateEventId: NonNullable<ScenarioEngineOptions['createEventId']> 
 export function createScenarioEngine(options: ScenarioEngineOptions = {}): ScenarioEngine {
   const createEventId = options.createEventId ?? defaultCreateEventId
   const now = options.now ?? (() => new Date().toISOString())
-  const findAddressThreshold = options.findAddressThreshold ?? findThreshold
 
   /**
    * Turn one resolution into its events, apply them, and assemble the output.
@@ -343,7 +326,7 @@ export function createScenarioEngine(options: ScenarioEngineOptions = {}): Scena
       const input = toolInputSchemas.address.parse(rawInput)
       return previewAddressAt(
         state,
-        addressTargetFor(findAddressThreshold(state, input.threshold))
+        addressTargetFor(findThreshold(state, input.threshold))
       )
     },
     executeAddress(
@@ -370,9 +353,7 @@ export function createScenarioEngine(options: ScenarioEngineOptions = {}): Scena
       const resolution = parsedInput.success
         ? resolveAddressTool(
             state,
-            addressTargetFor(
-              findAddressThreshold(state, parsedInput.data.threshold)
-            ),
+            addressTargetFor(findThreshold(state, parsedInput.data.threshold)),
             parsedInput.data,
             judge
           )

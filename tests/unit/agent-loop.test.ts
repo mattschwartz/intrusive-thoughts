@@ -16,6 +16,10 @@ import {
   type ScenarioEngine
 } from '../../src/main/world/engine'
 import {
+  thresholdOpenedFlag,
+  THRESHOLD_IDS
+} from '../../src/main/world/rooms'
+import {
   INTERACT_ACTIONS,
   LOCATION_IDS,
   OBJECT_IDS,
@@ -38,10 +42,8 @@ import {
 } from '../fixtures/fake-model-gateway'
 import { FakeJudgeGateway } from '../fixtures/fake-judge-gateway'
 import {
-  ADDRESSABLE_THRESHOLD_ID,
   IRIS_BEDROOM,
-  findTestAddressThreshold,
-  stateGrounding
+  stateAtBedroomDoor
 } from '../fixtures/provenance-cases'
 
 const RUN_ID = 'run-agent-loop'
@@ -73,18 +75,13 @@ async function makeHarness(
     onPersistedEvent?: (event: KnownGameEvent) => void
     secretsToRedact?: readonly string[]
     judge?: FakeJudgeGateway
-    /** Opt in to the synthetic addressable threshold. See provenance-cases. */
-    addressable?: boolean
   } = {}
 ): Promise<Harness> {
   const root = await mkdtemp(join(tmpdir(), 'intrusive-thoughts-loop-'))
   temporaryRoots.push(root)
   const engine = createScenarioEngine({
     now: () => TIMESTAMP,
-    createEventId: ({ type, sequence }) => `world-${type}-${sequence}`,
-    ...(options.addressable
-      ? { findAddressThreshold: findTestAddressThreshold }
-      : {})
+    createEventId: ({ type, sequence }) => `world-${type}-${sequence}`
   })
   let state = engine.createInitialState(RUN_ID, 'bare_embodiment')
   state = options.stateTransform?.(state) ?? state
@@ -854,11 +851,16 @@ describe('the address branch — the loop\'s one async tool', () => {
     'party_scorecard'
   ]
 
-  /** Grounds anchors on the loop's own run state. */
+  /**
+   * Stands the loop's run at the bedroom door with the named anchors grounded.
+   * Every address test needs it now that the threshold is the shipped one: an
+   * agent in the kitchen has no door to put an account to.
+   */
   function grounding(...anchorIds: string[]) {
-    const source = stateGrounding(...anchorIds)
+    const source = stateAtBedroomDoor(...anchorIds)
     return (state: GameState): GameState => ({
       ...state,
+      locationId: source.locationId,
       observations: source.observations,
       inventory: source.inventory,
       flags: { ...state.flags, ...source.flags }
@@ -870,7 +872,7 @@ describe('the address branch — the loop\'s one async tool', () => {
       fakeFunctionCall(
         'call-address',
         'address',
-        JSON.stringify({ threshold: ADDRESSABLE_THRESHOLD_ID, claim })
+        JSON.stringify({ threshold: THRESHOLD_IDS.bedroomDoor, claim })
       )
     ])
   }
@@ -898,7 +900,7 @@ describe('the address branch — the loop\'s one async tool', () => {
         ),
         textRound('address-text', 'It opened.')
       ],
-      { judge, addressable: true, stateTransform: grounding(...STRONG_SET) }
+      { judge, stateTransform: grounding(...STRONG_SET) }
     )
 
     const result = await harness.loop.runTurn({
@@ -910,7 +912,7 @@ describe('the address branch — the loop\'s one async tool', () => {
 
     expect(result.status).toBe('completed')
     expect(verdict).toMatchObject({
-      thresholdId: ADDRESSABLE_THRESHOLD_ID,
+      thresholdId: THRESHOLD_IDS.bedroomDoor,
       identityId: IRIS_BEDROOM.id,
       outcome: 'opened'
     })
@@ -921,14 +923,15 @@ describe('the address branch — the loop\'s one async tool', () => {
       promptVersion: 'fake-judge-prompt-v1'
     })
     expect(verdict?.gate.measuredOver).toBe('cited')
-    expect(result.state.flags['threshold.test_reconstruction_door.opened']).toBe(true)
+    expect(
+      result.state.flags[thresholdOpenedFlag(THRESHOLD_IDS.bedroomDoor)]
+    ).toBe(true)
   })
 
   it('hands the judge the claim and the catalog, and no state whatsoever', async () => {
     const judge = new FakeJudgeGateway([{ coherent: true }])
     const harness = await makeHarness([addressRound('the banner has her name on it')], {
       judge,
-      addressable: true,
       stateTransform: grounding(...STRONG_SET)
     })
 
@@ -953,7 +956,7 @@ describe('the address branch — the loop\'s one async tool', () => {
     const judge = new FakeJudgeGateway([{ coherent: true }])
     const harness = await makeHarness(
       [addressRound('It is obviously the bedroom. The music box says so.')],
-      { judge, addressable: true }
+      { judge, stateTransform: grounding() }
     )
 
     await harness.loop.runTurn({
@@ -984,7 +987,7 @@ describe('the address branch — the loop\'s one async tool', () => {
           )
         ])
       ],
-      { judge, addressable: true, stateTransform: grounding(...STRONG_SET) }
+      { judge, stateTransform: grounding(...STRONG_SET) }
     )
 
     await harness.loop.runTurn({
@@ -1006,7 +1009,7 @@ describe('the address branch — the loop\'s one async tool', () => {
   it('fails open when no judge gateway is configured', async () => {
     const harness = await makeHarness(
       [addressRound('The banner names her.'), textRound('address-text', 'Done.')],
-      { addressable: true, stateTransform: grounding(...STRONG_SET) }
+      { stateTransform: grounding(...STRONG_SET) }
     )
 
     const result = await harness.loop.runTurn({
@@ -1027,7 +1030,7 @@ describe('the address branch — the loop\'s one async tool', () => {
     const judge = new FakeJudgeGateway([{ coherent: true }], { throwOn: 0 })
     const harness = await makeHarness(
       [addressRound('The banner names her.'), textRound('address-text', 'Done.')],
-      { judge, addressable: true, stateTransform: grounding(...STRONG_SET) }
+      { judge, stateTransform: grounding(...STRONG_SET) }
     )
 
     const result = await harness.loop.runTurn({
@@ -1049,7 +1052,6 @@ describe('the address branch — the loop\'s one async tool', () => {
       [addressRound('The banner names her.'), textRound('address-text', 'Done.')],
       {
         judge,
-        addressable: true,
         limits: { judgeTimeoutMs: 5 },
         stateTransform: grounding(...STRONG_SET)
       }
@@ -1096,7 +1098,6 @@ describe('the address branch — the loop\'s one async tool', () => {
       ],
       {
         judge,
-        addressable: true,
         stateTransform: grounding('crayon_drawing', 'birthday_banner', 'height_marks')
       }
     )
@@ -1115,14 +1116,16 @@ describe('the address branch — the loop\'s one async tool', () => {
       'height_marks',
       'birthday_banner'
     ])
-    expect(result.state.flags['threshold.test_reconstruction_door.opened']).toBeUndefined()
+    expect(
+      result.state.flags[thresholdOpenedFlag(THRESHOLD_IDS.bedroomDoor)]
+    ).toBeUndefined()
   })
 
   it('keeps the verdict out of the next turn\'s compiled context', async () => {
     const judge = new FakeJudgeGateway([{ coherent: true }, { coherent: true }])
     const harness = await makeHarness(
       [addressRound('The banner names her.'), textRound('second', 'Understood.')],
-      { judge, addressable: true, stateTransform: grounding(...STRONG_SET) }
+      { judge, stateTransform: grounding(...STRONG_SET) }
     )
 
     const first = await harness.loop.runTurn({

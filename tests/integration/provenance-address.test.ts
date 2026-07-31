@@ -2,10 +2,9 @@
  * The address, end to end, with no network: model gateway faked, judge gateway
  * faked, verdict persisted to JSONL, run replayed from disk.
  *
- * The shipped room graph carries no `requires_address` threshold until #537
- * authors Act III, so these runs inject the synthetic one through
- * `ScenarioEngineOptions.findAddressThreshold` and start from a state that
- * grounds the anchors Acts I–II will eventually let a player gather.
+ * The threshold is the shipped one — `bedroom_door` in the upstairs hall — so
+ * these runs stand the agent in front of it with the anchors Acts I–II let a
+ * player gather already grounded. There is no address seam left to inject.
  */
 import { rm } from 'node:fs/promises'
 
@@ -16,15 +15,11 @@ import {
   ANCHOR_IDS,
   PROVENANCE_IDENTITY_IDS
 } from '../../src/main/world/provenance'
-import { thresholdOpenedFlag } from '../../src/main/world/rooms'
+import { thresholdOpenedFlag, THRESHOLD_IDS } from '../../src/main/world/rooms'
 import type { GameState, KnownGameEvent } from '../../src/shared'
 import { FakeJudgeGateway } from '../fixtures/fake-judge-gateway'
 import { fakeFunctionCall } from '../fixtures/fake-model-gateway'
-import {
-  ADDRESSABLE_THRESHOLD_ID,
-  IRIS_BEDROOM,
-  stateGrounding
-} from '../fixtures/provenance-cases'
+import { IRIS_BEDROOM, stateAtBedroomDoor } from '../fixtures/provenance-cases'
 import {
   createScriptedIntegrationHarness,
   scriptedTextRound,
@@ -56,16 +51,18 @@ const STRONG_SET = [
   ANCHOR_IDS.partyScorecard
 ]
 
-const OPENED_FLAG = thresholdOpenedFlag(ADDRESSABLE_THRESHOLD_ID)
+const OPENED_FLAG = thresholdOpenedFlag(THRESHOLD_IDS.bedroomDoor)
 
 const CLAIM =
   "This was Iris's bedroom. The drawing off the refrigerator is this room. " +
   'The banner has her name. The marks on the door frame are the ninth of March, and so is the scorecard.'
 
+/** Stands the run at the bedroom door with the named anchors grounded. */
 function grounding(...anchorIds: string[]) {
-  const source = stateGrounding(...anchorIds)
+  const source = stateAtBedroomDoor(...anchorIds)
   return (state: GameState): GameState => ({
     ...state,
+    locationId: source.locationId,
     observations: source.observations,
     inventory: source.inventory,
     flags: { ...state.flags, ...source.flags }
@@ -79,7 +76,7 @@ function addressRounds(claim: string) {
         callId: 'call-address',
         name: 'address',
         argumentsText: JSON.stringify({
-          threshold: ADDRESSABLE_THRESHOLD_ID,
+          threshold: THRESHOLD_IDS.bedroomDoor,
           claim
         })
       }
@@ -109,7 +106,6 @@ describe('the address, end to end and offline', () => {
       rounds: addressRounds(CLAIM),
       runId: 'integration-address-opened',
       judge,
-      addressable: true,
       stateTransform: grounding(...STRONG_SET)
     })
     temporaryRoots.push(harness.dataRoot)
@@ -121,7 +117,7 @@ describe('the address, end to end and offline', () => {
     const verdict = verdictIn(harness.events)
     expect(verdict?.visibility).toEqual(['engine', 'developer'])
     expect(verdict?.payload).toMatchObject({
-      thresholdId: ADDRESSABLE_THRESHOLD_ID,
+      thresholdId: THRESHOLD_IDS.bedroomDoor,
       identityId: IRIS_BEDROOM.id,
       claimText: CLAIM,
       outcome: 'opened'
@@ -164,7 +160,6 @@ describe('the address, end to end and offline', () => {
       rounds: addressRounds(CLAIM),
       runId: 'integration-address-bounced',
       judge,
-      addressable: true,
       stateTransform: grounding(ANCHOR_IDS.crayonDrawing)
     })
     temporaryRoots.push(harness.dataRoot)
@@ -200,7 +195,6 @@ describe('the address, end to end and offline', () => {
       rounds: addressRounds(CLAIM),
       runId: 'integration-address-outage',
       judge,
-      addressable: true,
       stateTransform: grounding(...STRONG_SET)
     })
     temporaryRoots.push(harness.dataRoot)
