@@ -8,6 +8,7 @@ import type { GameControllerModel } from '../hooks/useGameController'
 import { ContextInspector } from './ContextInspector'
 import { EventTimeline } from './EventTimeline'
 import { RunBrowser } from './RunBrowser'
+import { SliceInspector } from './SliceInspector'
 import { StateInspector } from './StateInspector'
 
 function contextForSelection(
@@ -155,6 +156,13 @@ export function DeveloperInspector({
               events={events}
               selectedEventId={state.selectedEventId}
               model={state.inspection.run.model}
+            />
+            <SliceInspector
+              snapshot={state.inspection.snapshot}
+              events={events}
+              {...(state.selectedEventId
+                ? { selectedEventId: state.selectedEventId }
+                : {})}
             />
             <ContextInspector event={context} />
             <StateInspector snapshot={state.inspection.snapshot} />

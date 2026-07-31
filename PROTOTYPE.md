@@ -81,6 +81,12 @@ The start screen exposes four experiment conditions. Each uses the same world, t
 
 Press `Ctrl+Shift+D` to toggle the developer inspector. In development builds, the **DEV** button opens the same drawer. Opening it does not pause or mutate a run. The drawer shows stored runs, exact compiled model context, inclusion/exclusion audit, canonical/agent/player state projections, tool activity, event history, request IDs, latency, usage, and failures.
 
+The **Slice state** panel adds the three v1 readings that raw canonical JSON does not make legible:
+
+- **Room position** — the current room and every revealed exit, with gated doors shown as gated rather than omitted. A door the agent knows about and cannot open is the Act III mechanic, not a missing edge.
+- **Relationship axes** — value, band, and the exact band line the model was given. The number appears here and nowhere the model or the player can see it.
+- **Provenance verdict** — the most recent address at or before the selected event: outcome, gate verdict, which anchor set sufficiency was measured over, missing dimensions, and the judge status. A verdict whose judge was unavailable was graded more permissively than one whose judge ran, and the panel says so; do not read an `opened` outcome without checking it. The candidate anchor list shown here is the answer key and is developer-visible only.
+
 To export, open the inspector and choose **Export** beside a stored run. The app writes:
 
 ```text
@@ -114,6 +120,8 @@ pnpm.cmd eval:report -- --input evaluation-output\<batch>\evaluation-results.jso
 ```
 
 The fixed seven-line player script, seven-turn cap, and eight-minute per-run cap are defined in `evaluation/player-script.ts`. Reports contain objective evidence and mark verbal behavior as `manual review required`; they do not calculate fear, humanity, trust, sentiment, or other subjective scores.
+
+The runner also constructs a provenance judge (`JUDGE_MODEL` overrides `OPENAI_MODEL` for it). Without one, every address records `judge.status: 'unavailable'` and sufficiency is measured over the gathered anchor set rather than the cited one — quietly more permissive — so the report prints a warning and those runs cannot support a provenance-reasoning conclusion. `evaluation/README.md` covers the four ways the v1 output is easy to misread, including why an authored death is an ending and why the reflection comparison is across runs rather than within one.
 
 ## Known limitations
 

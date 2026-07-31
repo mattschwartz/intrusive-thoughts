@@ -239,12 +239,72 @@ export const playerSceneViewSchema = z
   .strict()
 export type PlayerSceneView = z.infer<typeof playerSceneViewSchema>
 
+/**
+ * One axis as a developer reads it: the number *and* the band *and* the line
+ * the model was given for it.
+ *
+ * The number is present here and absent from `voiceAssessmentViewSchema` on
+ * purpose. §4.5 keeps numbers away from the model because a model shown a score
+ * optimises the score; a developer inspecting a finished run has the opposite
+ * problem, and a band with no number cannot answer "how close to the next
+ * band". This shape never reaches the agent or the player.
+ */
+export const developerAxisReadingSchema = z
+  .object({
+    value: relationshipAxisValueSchema,
+    band: relationshipBandSchema,
+    line: z.string().min(1)
+  })
+  .strict()
+export type DeveloperAxisReading = z.infer<typeof developerAxisReadingSchema>
+
+/**
+ * A revealed edge out of the current room. "Revealed" is what the agent knows
+ * exists, which is not the same as what it can walk through — a gated threshold
+ * is listed with `passable: false`, because a door you know about and cannot
+ * open is the whole Act III mechanic.
+ */
+export const developerThresholdViewSchema = z
+  .object({
+    id: z.string().min(1),
+    label: z.string().min(1),
+    toRoomId: z.string().min(1),
+    passable: z.boolean(),
+    requiresAddress: z.boolean()
+  })
+  .strict()
+export type DeveloperThresholdView = z.infer<typeof developerThresholdViewSchema>
+
+/** Where the run is standing in the room graph, and what leads out of it. */
+export const developerPositionViewSchema = z
+  .object({
+    roomId: z.string().min(1),
+    roomLabel: z.string().min(1),
+    thresholds: z.array(developerThresholdViewSchema)
+  })
+  .strict()
+export type DeveloperPositionView = z.infer<typeof developerPositionViewSchema>
+
+/**
+ * `axes` and `position` are derived rather than canonical, and they are derived
+ * in main because both the band thresholds and the room graph live there. The
+ * renderer must not carry a second copy of either: a duplicated `bandFor` would
+ * silently re-cut six authored passages the first time the splits move.
+ */
 export const developerSnapshotSchema = z
   .object({
     canonicalState: gameStateSchema,
     agentWorld: agentWorldViewSchema,
     agentBody: agentBodyViewSchema,
-    playerScene: playerSceneViewSchema
+    playerScene: playerSceneViewSchema,
+    axes: z
+      .object({
+        competence: developerAxisReadingSchema,
+        honesty: developerAxisReadingSchema,
+        care: developerAxisReadingSchema
+      })
+      .strict(),
+    position: developerPositionViewSchema
   })
   .strict()
 export type DeveloperSnapshot = z.infer<typeof developerSnapshotSchema>

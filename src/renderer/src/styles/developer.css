@@ -154,6 +154,32 @@
   background: #0a080b;
 }
 
+/* A three-column grid inside a third-width panel is unreadable. The slice
+   inspector stacks its rows instead. */
+.state-comparison .diagnostic-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.band-line {
+  display: block;
+  margin-top: 0.3rem;
+  color: #8c818f;
+  font-size: 0.58rem;
+  line-height: 1.45;
+}
+
+.threshold-list {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  color: #cfc6d4;
+  font-size: 0.62rem;
+  line-height: 1.45;
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+
 .safe-json {
   max-height: 22rem;
   margin: 0;

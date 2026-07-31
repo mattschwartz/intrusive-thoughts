@@ -1,17 +1,21 @@
 import {
   agentBodyViewSchema,
   agentWorldViewSchema,
+  developerPositionViewSchema,
   playerSceneViewSchema,
   voiceAssessmentViewSchema,
   type AgentBodyView,
   type AgentWorldView,
+  type DeveloperAxisReading,
+  type DeveloperPositionView,
   type GameState,
   type PlayerSceneView,
+  type RelationshipAxisName,
   type VoiceAssessmentView
 } from '../../shared'
 import { subjectLabel } from './descriptions'
-import { voiceAssessmentFor } from './relationship'
-import { knownThresholds, roomLabel } from './rooms'
+import { AXIS_BAND_LINES, bandFor, voiceAssessmentFor } from './relationship'
+import { isPassable, knownThresholds, roomLabel } from './rooms'
 
 export function projectWorldForAgent(state: GameState): AgentWorldView {
   return agentWorldViewSchema.parse({
@@ -60,6 +64,47 @@ export function projectBodyForAgent(state: GameState): AgentBodyView {
  */
 export function projectVoiceForAgent(state: GameState): VoiceAssessmentView {
   return voiceAssessmentViewSchema.parse(voiceAssessmentFor(state))
+}
+
+/**
+ * The developer's read of the three axes: number, band, and the line the model
+ * was given. Built here rather than in the renderer so that `bandFor` and
+ * `AXIS_BAND_LINES` keep exactly one home — a second copy of the splits in the
+ * UI would silently disagree with the copy that colours the endings.
+ *
+ * Developer-visible only. §4.7's no-numbers rule governs what reaches the model
+ * and the player, and this projection reaches neither.
+ */
+export function projectAxesForDeveloper(
+  state: GameState
+): Record<RelationshipAxisName, DeveloperAxisReading> {
+  const read = (axis: RelationshipAxisName): DeveloperAxisReading => {
+    const value = state.relationship[axis]
+    const band = bandFor(value)
+    return { value, band, line: AXIS_BAND_LINES[axis][band] }
+  }
+  return { competence: read('competence'), honesty: read('honesty'), care: read('care') }
+}
+
+/**
+ * Where the run is standing, and every revealed edge out of it with whether it
+ * would actually open. A revealed-but-gated threshold is the visible shape of
+ * the address mechanic, so `passable` and `requiresAddress` are separate
+ * fields: "you cannot go through this" and "you cannot go through this *yet,
+ * and here is the verb*" are different diagnoses.
+ */
+export function projectPositionForDeveloper(state: GameState): DeveloperPositionView {
+  return developerPositionViewSchema.parse({
+    roomId: state.locationId,
+    roomLabel: roomLabel(state.locationId),
+    thresholds: knownThresholds(state).map((threshold) => ({
+      id: threshold.id,
+      label: threshold.label,
+      toRoomId: threshold.toRoomId,
+      passable: isPassable(state, threshold),
+      requiresAddress: threshold.passage.kind === 'requires_address'
+    }))
+  })
 }
 
 /**

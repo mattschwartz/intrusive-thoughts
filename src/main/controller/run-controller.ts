@@ -490,6 +490,22 @@ export class RunController {
     return { runId, path }
   }
 
+  /**
+   * One place the developer snapshot is assembled. Two call sites built it
+   * independently before, which is exactly how one of them ends up missing a
+   * field the other has.
+   */
+  private developerSnapshotFor(state: GameState): DeveloperSnapshot {
+    return developerSnapshotSchema.parse({
+      canonicalState: state,
+      agentWorld: this.engine.projectForAgent(state),
+      agentBody: this.engine.projectBodyForAgent(state),
+      playerScene: this.engine.projectForPlayer(state),
+      axes: this.engine.projectAxesForDeveloper(state),
+      position: this.engine.projectPositionForDeveloper(state)
+    })
+  }
+
   async getDeveloperSnapshot(runId: string): Promise<DeveloperSnapshot> {
     let state: GameState
     if (this.active?.info.runId === runId) {
@@ -499,23 +515,12 @@ export class RunController {
     } else {
       state = (await this.store.replayRun(runId)).finalState
     }
-    return developerSnapshotSchema.parse({
-      canonicalState: state,
-      agentWorld: this.engine.projectForAgent(state),
-      agentBody: this.engine.projectBodyForAgent(state),
-      playerScene: this.engine.projectForPlayer(state)
-    })
+    return this.developerSnapshotFor(state)
   }
 
   async getDeveloperInspection(runId: string): Promise<DeveloperInspection> {
     const replay = await this.store.replayRun(runId)
-    const state = replay.finalState
-    const snapshot = developerSnapshotSchema.parse({
-      canonicalState: state,
-      agentWorld: this.engine.projectForAgent(state),
-      agentBody: this.engine.projectBodyForAgent(state),
-      playerScene: this.engine.projectForPlayer(state)
-    })
+    const snapshot = this.developerSnapshotFor(replay.finalState)
     return developerInspectionSchema.parse({
       run: {
         runId: replay.metadata.runId,

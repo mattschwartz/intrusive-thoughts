@@ -112,7 +112,9 @@ function makeInspection(): DeveloperInspection {
       canonicalState,
       agentWorld: engine.projectForAgent(canonicalState),
       agentBody: engine.projectBodyForAgent(canonicalState),
-      playerScene: engine.projectForPlayer(canonicalState)
+      playerScene: engine.projectForPlayer(canonicalState),
+      axes: engine.projectAxesForDeveloper(canonicalState),
+      position: engine.projectPositionForDeveloper(canonicalState)
     },
     events: [contextEvent, toolRequested, toolResolved]
   })

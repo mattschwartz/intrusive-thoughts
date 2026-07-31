@@ -15,6 +15,9 @@ import {
   type PromptVariant,
   type ToolExecutionMetadata,
   type ToolRequest,
+  type DeveloperAxisReading,
+  type DeveloperPositionView,
+  type RelationshipAxisName,
   type VoiceAssessmentView
 } from '../../shared'
 import {
@@ -28,7 +31,9 @@ import { resolveAmbient } from './ambient'
 import { interpretPlayerTurn, PLAYER_INTENT_MATCHER_VERSION } from './intent'
 import { findThreshold } from './rooms'
 import {
+  projectAxesForDeveloper,
   projectBodyForAgent,
+  projectPositionForDeveloper,
   projectSceneForPlayer,
   projectVoiceForAgent,
   projectWorldForAgent
@@ -101,6 +106,11 @@ export interface ScenarioEngine {
   projectBodyForAgent(state: GameState): AgentBodyView
   projectForPlayer(state: GameState): PlayerSceneView
   projectVoiceForAgent(state: GameState): VoiceAssessmentView
+  /** Developer-only, out of fiction. Neither reaches the agent or the player. */
+  projectAxesForDeveloper(
+    state: GameState
+  ): Record<RelationshipAxisName, DeveloperAxisReading>
+  projectPositionForDeveloper(state: GameState): DeveloperPositionView
 }
 
 export interface ScenarioEngineOptions {
@@ -406,7 +416,9 @@ export function createScenarioEngine(options: ScenarioEngineOptions = {}): Scena
     projectForAgent: projectWorldForAgent,
     projectBodyForAgent,
     projectForPlayer: projectSceneForPlayer,
-    projectVoiceForAgent
+    projectVoiceForAgent,
+    projectAxesForDeveloper,
+    projectPositionForDeveloper
   }
 }
 
