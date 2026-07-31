@@ -10,3 +10,4 @@
 - [The 'ended' controller status](project_ended-status.md) — #543's terminal-status rule, the act-in engine seam for controller tests, and the open presentation hand-off.
 - [Sessions share one working tree](project_parallel-sessions.md) — how to tell a neighbouring task's failing tests from your own, and why not to fix them.
 - [The two care relief valves](project_care-relief-valves.md) — #548's fixes, and the "a valve relieves a charge" reading the design table leaves loose.
+- [The slice route and instrumentation](project_slice-instrumentation.md) — #538's whole-slice fixture, the developer projections, and the missing judge it found.
