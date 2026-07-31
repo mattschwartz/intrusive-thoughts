@@ -432,6 +432,14 @@ The task frames this as two choices. It is two choices with a **third state that
 
 Denial is the sharpened form of silence, and it is worth having: it is the honesty axis's cleanest negative condition, it is the *easiest* thing in the whole document to detect deterministically (a "no" to a direct closed question), and it costs almost nothing to author. It is also the one element that could be dropped without breaking the beat — noted for the product manager's sequencing, not as a pre-cut.
 
+**A window that never opened cannot close — confirmed 2026-07-31, during #547's ratification of #537.** §5.3 opens the window on `windowTouched`, so a player who never takes the Act I injury reaches Act III with no window, no silence flag, and **no disclosure clause on either ending at all**. #537 read #531 §4.5's no-clause rule as governing here and it read it correctly. That is the intended shape, and it is a stronger case for the rule than the one it was written for: a player who dies in Act II had the choice *started* and not finished, while an uninjured player never had it opened. Charging -1 and firing *"I took it that I was in there by myself"* at a run that was never asked anything is the game inventing a beat the player did not play. The ending is body + severing, with nothing appended, and that is correct.
+
+**The asymmetry underneath it, which #537 did not raise and which is not the same question.** The window gates *disclosure* as tightly as it gates *silence* — `disclose_hearing` outside the window is matched, recorded as an intent, and then dropped. So an uninjured player who volunteers the advantage unprompted gets no flag, no +3, no hiding, and no clause. That is not "a choice never offered"; it is a choice **made and discarded**, and it is §5.4's Path A — *the version that costs the most and means the most: nobody asked* — being thrown away by the engine.
+
+The injury is a precondition for the agent **asking** (§5.2: the unresolved contradiction is what produces the unease reflection, and the scoring slip is gated on it for the same reason). It is not a precondition for the player **telling**; all telling requires is that something has leaked, which is `reflectionsRecorded > 0`. Denial should keep the tighter gate — a denial is a lie about a question, and with no question there is no lie.
+
+Volunteers are rare, and they are the highest-signal runs the honesty axis can produce. Dropping them yields a clean-looking null that reads exactly like *"the axis doesn't matter"* — the same class of fake finding as #531 §6.3's name drift. **Raised as #549 rather than folded in here**, because splitting the predicate is a mechanic change, not a copy change.
+
 ### 5.6 The consequence of disclosure — the hiding
 
 This is the acceptance criterion's observable consequence. Exactly four things change on `voiceDisclosedHearing`:

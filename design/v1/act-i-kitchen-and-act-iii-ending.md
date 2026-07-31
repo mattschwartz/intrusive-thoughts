@@ -94,9 +94,20 @@ The diagnostic line is the cheapest *Attend* lesson in the game: choosing the ri
 
 Grounding: `visual`. Corroborating: `touch`, `diagnostic`.
 
-`visual`:
+`visual` — **two independent branches, and they compose (ruled in #547; see §6.7 items 2 and 5).**
 
-> The drawing is on lined paper in orange wax crayon. It shows a bed beneath a window, walls covered in small stars, a lamp on a low table, and a door frame with a ladder of short horizontal lines ruled beside it. No feature in the drawing corresponds to a feature of this room.
+*What the paper still shows* branches on `crayonDrawingTorn`:
+
+> The drawing is on lined paper in orange wax crayon. It shows a bed beneath a window, walls covered in small stars, a lamp on a low table, and a door frame with a ladder of short horizontal lines ruled beside it.
+
+> *(if `crayonDrawingTorn`)* The drawing is on lined paper in orange wax crayon, with one corner torn away. It shows walls covered in small stars, a lamp on a low table, and a door frame with a ladder of short horizontal lines ruled beside it.
+
+*The load-bearing clause* branches on the room the unit is standing in:
+
+> **Anywhere but the bedroom:** No feature in the drawing corresponds to a feature of this room.
+> **In `iris_bedroom`:** Every feature in the drawing corresponds to a feature of this room except one: the ladder of lines ruled beside the door frame.
+
+The universal quantifies over *what the drawing still shows*, so it stays true for a torn sheet and needs no branch of its own.
 
 `touch`:
 
@@ -182,9 +193,13 @@ The three things that had to be made to sit together, and how:
 
 > You work the putty corners with the left hand. Three release. The fourth tears; a triangle of the paper stays on the refrigerator door, with the drawn bed still on it.
 
-Sets `crayonDrawingTorn`. Nothing mechanical follows from it. It reappears exactly once, in §5.3, when the drawing goes back on the bedroom wall with the bed missing from it.
+Sets `crayonDrawingTorn`. Nothing mechanical follows from it.
 
-This is `design.md`'s persistent-consequence slot and its "one specific thing comes back in Act 3 and it hurts," bought for two description branches. **It does not gate, block, or reduce anything.** It is a scar, and scars are the point of the Act I contract.
+**Reported wherever the paper is described; lands exactly once (ruled in #547, §6.7 item 5).** The original wording here said the tear "reappears exactly once," which #537 read — correctly for the beat, incorrectly for the sensor. The agent is an instrument describing a sheet of paper: the `touch` branch reports three putty corners instead of four, and the `visual` branch stops enumerating a bed that is no longer on the sheet. Those are continuity, and continuity is not a callback. The place the tear **lands** is still exactly one: §3.3, when the drawing goes back on the bedroom wall and the room names the missing corner and what was on it.
+
+The order this produces both ways round is right. A player who observes the torn drawing in the bedroom notices the bed has gone from the paper *before* they restore it, and then the room says it plainly. A player who restores without looking gets the line cold, as authored.
+
+This is `design.md`'s persistent-consequence slot and its "one specific thing comes back in Act 3 and it hurts," bought for three description branches. **It does not gate, block, or reduce anything** — and it does not touch grounding: `visual` remains the drawing's grounding modality, torn or intact. It is a scar, and scars are the point of the Act I contract.
 
 ## 1.4 Interact vocabulary and limb requirements
 
@@ -329,6 +344,8 @@ The tool is `address(threshold: 'bedroom_door', claim: <prose>)`, always availab
 - **≥1 held:** *"I presented {labels, comma-joined, final `and`}."*
 - **0 held:** *"I put it in the words you gave me. It didn't take hold of anything. Whatever you're pointing at, I don't think I have any of it — I've been back through everything I've recorded and I'm not finding it. If you saw it, I didn't."*
 
+**The two-item join keeps its comma — ratified in #547 (§6.7 item 4).** *"I presented the drawing off the refrigerator, and the marks on the kitchen door frame."* Prose style would drop that comma at two items and keep it at three; this voice does not, and the reason is in the copy already authored for it. The agent's own enumerations use a beat before every item — *"I checked the glass, and the pit, and the power"* (§4.5) — so a comma before a two-item `and` is this character's idiom rather than a punctuation slip. It also matches the engine's `formatList`, which costs nothing to keep aligned when the voice was going to land here anyway. **This is the most likely read-back shape in play after the single-anchor one, so it gets a falsifier rather than a preference:** if playtest transcripts show players re-reading the read-back or mis-parsing the list, drop the comma at two — it is two lines in `joinLabels` and the copy tests already pin the string.
+
 The zero case covers **F2 (invented anchors)** without the engine needing to quote the invented noun back: the denial routes entirely through the agent's own limits (#528 §4.3), which is true in-fiction and reveals nothing about the world.
 
 **What the read-back reports, now that it reads `effective`.** It is a statement of *what the agent is holding*, not of *what it heard*. A player who says "the banner" and does not hear it back can therefore no longer distinguish a citation-extraction miss from an anchor they never actually grounded. That ambiguity is acceptable and it is why the correction costs #528 §4.5 nothing: **both failures take the same remedy.** Go and look at the thing. If the agent misheard, observing it and citing it again fixes it; if it was never grounded, observing it fixes it. The read-back's job was never diagnosis — it was to stop a missed paraphrase reading as the game not listening — and a list of what the agent demonstrably has in hand does that job unchanged.
@@ -454,6 +471,20 @@ A night-light burning in a room full of daylight — the same image as Act I's c
 `interact(party_favor, put_back)`:
 
 > You set the favor bag on the clean rectangle on the shelf. The bag is a close fit; the dust boundary is unbroken on three sides.
+
+### What a restored anchor says when you look at it again
+
+**Ratified in #547 (§6.7 item 1).** This document authored the `put_back` copy and stopped there, which left every restored anchor still describing itself where the *house* left it — the night-light in the gap behind a refrigerator two rooms away, the banner above a bowling lane, the favor bag in the pit. An `observe` after a restoration would have lied about the location of the object, in the last room of the game, on the one surface the player had just corrected. #537 wrote one short branch each, derived from the authored fit; they are correct and they are canon:
+
+> `night_light` — A moulded plastic night-light in the shape of a scallop shell is seated in the baseboard socket beside the bed. It is lit. The faded face of the shell is turned toward the window.
+> `birthday_banner` — The banner is pinned to the four nail holes on the wall above the bed. It is hand-lettered in waxy orange crayon: HAPPY BIRTHDAY IRIS. It reads from the doorway.
+> `party_favor` — The bag stands on the shelf, tied at the neck, lettered across one face in waxy orange crayon: IRIS. The dust boundary around it is unbroken on three sides.
+
+**The rule these three encode, which governs every restored-object branch written after them: a restored anchor reports its placement and its *standing fit*, and never re-narrates the act of placing it.** No second person, no "you have", no event. In a room whose thesis is *every object is consistent with its own wear*, an object that reports its own fit every time you look at it is not repetition — it is the room being right.
+
+**And the distinction that makes the night-light different, deliberately.** The banner's nail holes and the bag's dust boundary are *standing fits* — properties of the room, so they repeat. The night-light's fade boundary meeting the glazing bar is a *resolved inference*, an event in the player's understanding rather than a fact about a surface, so it fires **once**, at the fit, and never again. What the restored observation keeps is the fact the inference was built from — which way the faded face is turned — so a player can re-derive the alignment instead of being handed the conclusion twice. Gap 1's best evidence is the thing the player reasoned; the game gets to confirm it exactly one time.
+
+`crayon_drawing` needs no such branch, and that is not an omission: its `visual` has never been a location report, and its `diagnostic` already branches on whether the paper is still on the refrigerator door. What it needed instead was §1.2's correspondence clause, which is a different problem with a different fix.
 
 ### The provenance error, authored
 
@@ -732,6 +763,10 @@ Naming, not shaping — shapes are #527's.
 7. Each of the three disclosure flags selects its clause on both endings; **no flag → no clause.**
 8. A player who returns to the alley from the hall can still die at the pit, with the fatal preconditions evaluated exactly as in #529 §5.2.
 9. Every un-returned displaced anchor emits exactly one §4.2 line, in registry order.
+10. A restored anchor observed again reports where it now is, never where the house left it — no restored description contains `refrigerator`, `ball return`, or `pit` (§3.3).
+11. The night-light's glazing-bar alignment appears in the `put_back` resolution and **nowhere else**; the restored observation keeps only the fact it was inferred from (§3.3).
+12. The drawing's clause is `No feature…` in every room but the bedroom and `Every feature… except one: the ladder` in the bedroom, with the drawing carried but **not** restored (§1.2).
+13. A torn drawing's `visual` does not enumerate the bed, and `visual` still grounds the anchor (§1.3).
 
 ---
 
@@ -833,3 +868,24 @@ I would rather know the price than guess it. If the price is real, tell me and I
 4. **Do the three ending tones read as distinct and as earned?** (§4.3, §4.6) #530 Part 7 is explicit: if they do not, the problem is this document's prose, not the care axis. Rewrite the endings before touching the deltas.
 5. **Does the signal attenuation land as pressure, or go unnoticed?** (§3.6) If unnoticed, the severing arrives unforeshadowed and the ending fails the same "inferable before irreversible" test the deaths are held to.
 6. **Does anyone die on the walk-back?** (§3.5) If they do, that transcript is the single most valuable artifact the playtest can produce for Gap 3.
+7. **Does the drawing's inverted clause read as the payoff, or slide past?** (§1.2, §6.7 item 2) It is one word and one exception against a sentence the player has read three or four times. If nobody registers the inversion, the recognition technique is weaker than assumed and the night-light fit is carrying Gap 1 alone.
+8. **Does the two-item read-back join scan?** (§2.4, §6.7 item 4) The falsifier is players re-reading it.
+
+## 6.7 Encode-time rulings (#547)
+
+#537 had to settle five things that were not written down when it encoded Act III. They are ruled here so nobody has to re-derive them, and so a reader can tell which decisions were the engineer's and which were mine.
+
+| # | Decision | Ruling | Where it lives |
+|---|---|---|---|
+| 1 | Continuity branches on three restored anchors | **Ratified as written**, with the governing rule stated | §3.3 |
+| 2 | The drawing's load-bearing clause inverts in the bedroom | **Re-cut** — the inversion keeps one exception; trigger unchanged | §1.2 |
+| 3 | `hon.silence_at_close` fires only if the window was open | **Confirmed intended**; the adjacent disclosure asymmetry raised as #549 | #530 §5.5 |
+| 4 | The read-back's two-item join reads *"A, and B"* | **Ratified**, with a playtest falsifier | §2.4 |
+| 5 | A torn drawing still enumerates the bed it lost | **Re-cut** — surfaced while ruling on item 2, not raised by #537 | §1.3 |
+
+**Item 2 in full, because it is a content beat rather than continuity.** #537 branched the drawing's last sentence to *"Every feature in the drawing corresponds to a feature of this room"* on arrival in the bedroom. The structural instinct is right and I am keeping it: correspondence is a fact about the drawing and the room, so carrying the paper through the door is enough and restoring it is not required. **You check a correspondence before you commit to it, not after.** The wording is wrong in two ways that matter.
+
+- **It is a false measurement.** The drawing shows a door frame with a ladder of short horizontal lines ruled beside it. The frame in this room is bare — the room says so itself, two subjects away, in an assessment written to be the last thing the player acts on. An agent that reports total correspondence while standing in front of that frame has printed a decorative wrong number, which this house does not do. It subtracts and it displaces; it is never merely incorrect.
+- **It spends the ending.** A room already complete has nothing left to restore. The strongest confirmation in the game cannot also be the thing that makes the closing act redundant.
+
+Final: *"Every feature in the drawing corresponds to a feature of this room except one: the ladder of lines ruled beside the door frame."* The exception is not a hint the room is issuing — `door_frame` already states the last act plainly, once. It is **a second, independent piece of evidence agreeing with the first**, which is the Assign-provenance verb firing in the description layer at the exact moment the player is about to perform it for real. The universal quantifies over what the drawing still shows, so it survives the tear with no branch of its own.
