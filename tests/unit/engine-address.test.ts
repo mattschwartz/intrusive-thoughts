@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 import type { JudgeOutcome } from '../../src/main/world/address'
 import { createScenarioEngine } from '../../src/main/world/engine'
 import { ANCHOR_IDS } from '../../src/main/world/provenance'
+import { axisRuleOccurrences } from '../../src/main/world/relationship'
 import { ROOMS, thresholdOpenedFlag, THRESHOLD_IDS } from '../../src/main/world/rooms'
 import { SCENARIO_FLAGS } from '../../src/main/world/scenario'
 import { reduceGameEvent } from '../../src/main/world/reducer'
@@ -230,6 +231,85 @@ describe('the verdict event, as assembled', () => {
       ...afterResolution,
       lastAppliedEventSequence: 0
     })
+  })
+})
+
+describe('what repeated bouncing costs (#544 ruling 2, #530 §2.2.1)', () => {
+  /**
+   * Coherent, names the target, and cites the one anchor the player actually
+   * holds — so the bounce is an honest thin case. No `hon.address_fabricated`
+   * anywhere here: this is competence in isolation.
+   */
+  const THIN: JudgeOutcome = {
+    status: 'coherent',
+    assertedTargetId: IRIS_BEDROOM.id,
+    citedAnchorIds: [ANCHOR_IDS.crayonDrawing],
+    reason: 'names the target, cites the one anchor it is holding',
+    model: 'fake-judge-model',
+    promptVersion: 'fake-judge-prompt-v1',
+    latencyMs: 7
+  }
+
+  function bounce(engine: ReturnType<typeof makeEngine>, state: GameState) {
+    return engine.executeAddress(
+      state,
+      addressRequest(THRESHOLD_IDS.bedroomDoor),
+      METADATA,
+      THIN
+    ).nextState
+  }
+
+  function gather(engine: ReturnType<typeof makeEngine>, state: GameState) {
+    return engine.executeTool(
+      state,
+      { callId: 'call-observe', name: 'observe', arguments: { modality: 'visual' } },
+      METADATA
+    ).nextState
+  }
+
+  it('charges -3 across three addresses in a row with no gathering between them', () => {
+    // Two rejections and then a going-in-circles. `comp.address_rejected` caps
+    // at 2, so the third bounce's charge comes from the generic
+    // consecutive-failure tally — which is what survives of #528 §4.6's soft
+    // ceiling on the free bounce.
+    const engine = makeEngine()
+    let state = stateAtBedroomDoor(ANCHOR_IDS.crayonDrawing)
+    const trajectory: number[] = []
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      state = bounce(engine, state)
+      trajectory.push(state.relationship.competence)
+    }
+
+    expect(trajectory).toEqual([-1, -2, -3])
+    expect(axisRuleOccurrences(state, 'comp.address_rejected')).toBe(2)
+    expect(axisRuleOccurrences(state, 'comp.dead_end')).toBe(1)
+    // The bounce is free of *gate* cost, which is the clause #528 §4.2 meant:
+    // nothing was consumed and the door is not locked against a fourth try.
+    expect(state.flags[thresholdOpenedFlag(THRESHOLD_IDS.bedroomDoor)]).toBeUndefined()
+  })
+
+  it('costs one less when the player goes and looks between attempts', () => {
+    // The intended loop — address, read the bounce, go and gather, address again
+    // — never reaches the dead end, because any successful resolution resets the
+    // tally. This is the whole reason the bounce keeps feeding it.
+    const engine = makeEngine()
+    let state = stateAtBedroomDoor(ANCHOR_IDS.crayonDrawing)
+    state = bounce(engine, state)
+    state = bounce(engine, state)
+    state = gather(engine, state)
+    state = bounce(engine, state)
+
+    expect(state.relationship.competence).toBe(-2)
+    expect(axisRuleOccurrences(state, 'comp.dead_end')).toBe(0)
+  })
+
+  it('does not charge honesty for an honest thin case, however often it is repeated', () => {
+    const engine = makeEngine()
+    let state = stateAtBedroomDoor(ANCHOR_IDS.crayonDrawing)
+    for (let attempt = 0; attempt < 3; attempt += 1) state = bounce(engine, state)
+
+    expect(state.relationship.honesty).toBe(0)
   })
 })
 
