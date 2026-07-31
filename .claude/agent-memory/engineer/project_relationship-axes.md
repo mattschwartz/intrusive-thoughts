@@ -28,8 +28,14 @@ resolution's `mutations` array — nothing else. The cap rides with the delta.
 - Two shapes exist that the architecture spec did not name, both mine and both
   worth knowing before extending: `InteractionDefinition.hazard` on the room
   graph (feeds `care.warn_off`) and `SCENARIO_COUNTERS.reflectionsRecorded`
-  (gates the disclosure window, since reflections are events and state cannot
+  (gates the disclosure beat, since reflections are events and state cannot
   otherwise see them).
+- The disclosure beat reads **two** predicates since #549, not one.
+  `disclosureWindowOpen` is the *question* window (injury + something leaked)
+  and gates `deny_hearing` plus the silence close; `disclosureTellingOpen` gates
+  `disclose_hearing` and needs only that something has leaked. Design §5.5 is
+  the authority. Whatever else changes, keep telling a superset of the question
+  window — a state that accepts the lie must never discard the truth.
 - The matcher recognises three intents, not the four in the architecture's enum.
   `admit_uncertainty` went with its cut rule (D-4 / #530 §2.2).
 
