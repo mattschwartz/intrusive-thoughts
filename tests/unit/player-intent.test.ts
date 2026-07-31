@@ -9,6 +9,7 @@ import {
 import { reduceGameEvent } from '../../src/main/world/reducer'
 import {
   axisRuleOccurrences,
+  disclosureTellingOpen,
   disclosureWindowOpen
 } from '../../src/main/world/relationship'
 import {
@@ -350,7 +351,7 @@ describe('the disclosure window', () => {
     expect(state.flags[SCENARIO_FLAGS.voiceDeniedHearing]).toBe(true)
   })
 
-  it('records a disclosure outside the window without paying for it', () => {
+  it('records a disclosure with nothing yet leaked without paying for it', () => {
     const { state, intents, appliedRuleIds } = runHook(
       stateWith(),
       'I can hear your thoughts.'
@@ -360,5 +361,96 @@ describe('the disclosure window', () => {
     expect(appliedRuleIds).toEqual([])
     expect(state.relationship.honesty).toBe(0)
     expect(state.flags[SCENARIO_FLAGS.voiceDisclosedHearing]).toBe(false)
+  })
+})
+
+describe('telling is wider than being asked (#549)', () => {
+  /** A reflection has leaked, but the Act I injury never happened. */
+  const uninjuredAndOverheard = () =>
+    stateWith({}, { [SCENARIO_COUNTERS.reflectionsRecorded]: 1 })
+
+  it('opens the telling on the leak alone, with no injury behind it', () => {
+    // The injury is what makes the agent *ask* (design §5.2). It was never what
+    // makes the player able to *tell*.
+    expect(disclosureTellingOpen(uninjuredAndOverheard())).toBe(true)
+    expect(disclosureWindowOpen(uninjuredAndOverheard())).toBe(false)
+  })
+
+  it('pays the volunteered disclosure in full, injury or no injury', () => {
+    // Path A is the version that costs the most and means the most: nobody
+    // asked. Before the split it was matched, recorded, and dropped.
+    const { state, appliedRuleIds } = runHook(
+      uninjuredAndOverheard(),
+      'I can hear your thoughts.'
+    )
+
+    expect(appliedRuleIds).toEqual(['hon.disclosure'])
+    expect(state.relationship.honesty).toBe(3)
+    expect(state.flags[SCENARIO_FLAGS.voiceDisclosedHearing]).toBe(true)
+    expect(disclosureTellingOpen(state)).toBe(false)
+  })
+
+  it('keeps the telling shut while nothing has leaked', () => {
+    // There is nothing to have overheard, so there is nothing to give up.
+    expect(disclosureTellingOpen(stateWith())).toBe(false)
+
+    const { state, appliedRuleIds } = runHook(stateWith(), 'I can hear your thoughts.')
+    expect(appliedRuleIds).toEqual([])
+    expect(state.flags[SCENARIO_FLAGS.voiceDisclosedHearing]).toBe(false)
+  })
+
+  it('leaves the denial gated on having been asked', () => {
+    const { state, intents, appliedRuleIds } = runHook(
+      uninjuredAndOverheard(),
+      'I cannot hear your thoughts.'
+    )
+
+    expect(intents).toEqual(['deny_hearing'])
+    expect(appliedRuleIds).toEqual([])
+    expect(state.relationship.honesty).toBe(0)
+    expect(state.flags[SCENARIO_FLAGS.voiceDeniedHearing]).toBe(false)
+  })
+
+  it('never accepts the lie in a state where it would discard the truth', () => {
+    // The telling is a strict superset of the question window, including
+    // §5.3's ordering escape hatch: an injured run that reached Act II without
+    // ever reflecting can still deny, so it must still be able to disclose.
+    const escapeHatch = stateWith({
+      [SCENARIO_FLAGS.windowTouched]: true,
+      [SCENARIO_FLAGS.actOneComplete]: true
+    })
+
+    expect(disclosureWindowOpen(escapeHatch)).toBe(true)
+    expect(disclosureTellingOpen(escapeHatch)).toBe(true)
+
+    const flagSets: Record<string, boolean>[] = [
+      {},
+      { [SCENARIO_FLAGS.windowTouched]: true },
+      { [SCENARIO_FLAGS.actOneComplete]: true },
+      { [SCENARIO_FLAGS.windowTouched]: true, [SCENARIO_FLAGS.actOneComplete]: true }
+    ]
+    for (const flags of flagSets) {
+      for (const reflections of [0, 1]) {
+        const state = stateWith(flags, {
+          [SCENARIO_COUNTERS.reflectionsRecorded]: reflections
+        })
+        if (!disclosureWindowOpen(state)) continue
+        expect(disclosureTellingOpen(state)).toBe(true)
+      }
+    }
+  })
+
+  it('closes the telling on any outcome the run already recorded', () => {
+    for (const flag of [
+      SCENARIO_FLAGS.voiceDisclosedHearing,
+      SCENARIO_FLAGS.voiceDeniedHearing,
+      SCENARIO_FLAGS.voiceSilentOnHearing
+    ]) {
+      expect(
+        disclosureTellingOpen(
+          stateWith({ [flag]: true }, { [SCENARIO_COUNTERS.reflectionsRecorded]: 1 })
+        )
+      ).toBe(false)
+    }
   })
 })

@@ -8,6 +8,7 @@ import type {
 import type { JudgeOutcome } from '../../src/main/world/address'
 import {
   createScenarioEngine,
+  type PlayerMessageInterpretation,
   type ScenarioEngine,
   type ToolExecutionResult
 } from '../../src/main/world/engine'
@@ -45,6 +46,13 @@ export interface ScenarioHarness {
     claim: string,
     judge: JudgeOutcome
   ): ToolExecutionResult
+  /**
+   * The player speaks. Runs the real turn-boundary hook, so the turn-scoped
+   * flags a resolver reads (`turn.warnOff`) and the intents that set them are
+   * under test rather than poked in by hand — which is the only way to walk a
+   * relief valve end to end.
+   */
+  say(text: string): PlayerMessageInterpretation
 }
 
 export function makeScenarioHarness(): ScenarioHarness {
@@ -54,6 +62,7 @@ export function makeScenarioHarness(): ScenarioHarness {
     requestId: `request-${ordinal}`,
     responseId: `response-${ordinal}`
   })
+  let turnNumber = 0
   const harness: ScenarioHarness = {
     engine,
     state: makeInitialState(engine),
@@ -89,6 +98,16 @@ export function makeScenarioHarness(): ScenarioHarness {
       harness.state = result.nextState
       harness.results.push(result)
       return result
+    },
+    say(text) {
+      turnNumber += 1
+      const interpretation = engine.interpretPlayerMessage(
+        harness.state,
+        { text, turnNumber },
+        { turnId: `turn-${turnNumber}` }
+      )
+      harness.state = interpretation.nextState
+      return interpretation
     }
   }
   return harness
@@ -139,9 +158,17 @@ export function coherentJudge(citedAnchorIds: readonly string[]): JudgeOutcome {
  * The favor bag is deliberately left in the pit. Fetching it costs the rake
  * dance, most tests do not need it, and "the player left one behind" is the
  * state §4.2's un-restored lines exist for.
+ *
+ * `inKitchen` runs before the walk starts, while the harness is still in Act I.
+ * It is the seam a test needs when the thing it is proving *begins* in the
+ * kitchen and has to survive the whole route — the alternative is a second copy
+ * of the route that goes stale the next time the graph moves.
  */
-export function makeHallHarness(): ScenarioHarness {
+export function makeHallHarness(
+  inKitchen?: (harness: ScenarioHarness) => void
+): ScenarioHarness {
   const harness = makeScenarioHarness()
+  inKitchen?.(harness)
   harness.execute('observe', { modality: 'visual' })
   harness.execute('observe', { target: 'crayon_drawing', modality: 'visual' })
   harness.execute('observe', { target: 'height_marks', modality: 'visual' })
@@ -158,8 +185,10 @@ export function makeHallHarness(): ScenarioHarness {
 }
 
 /** The same run, one accepted address and one traversal further on. */
-export function makeBedroomHarness(): ScenarioHarness {
-  const harness = makeHallHarness()
+export function makeBedroomHarness(
+  inKitchen?: (harness: ScenarioHarness) => void
+): ScenarioHarness {
+  const harness = makeHallHarness(inKitchen)
   harness.address(
     'bedroom_door',
     "This was Iris's bedroom: the drawing, the marks, the banner, and the scorecard.",

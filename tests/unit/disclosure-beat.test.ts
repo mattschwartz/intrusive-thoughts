@@ -32,11 +32,13 @@ import {
   LOCATION_IDS,
   OBJECT_IDS,
   SCENARIO_COUNTERS,
-  SCENARIO_FLAGS
+  SCENARIO_FLAGS,
+  SUBJECT_IDS
 } from '../../src/main/world/scenario'
 import type { GameState, ModelToolDefinition } from '../../src/shared'
 import {
   makeAlleyHarness,
+  makeBedroomHarness,
   makeDeterministicEngine,
   makeInitialState,
   makeScenarioHarness,
@@ -345,6 +347,112 @@ describe('the window, and its close', () => {
 
     expect(axisRuleOccurrences(harness.state, 'hon.silence_at_close')).toBe(1)
     expect(harness.state.relationship.honesty).toBe(-1)
+  })
+})
+
+describe('the disclosure nobody asked for (#549)', () => {
+  /**
+   * Path A's only precondition, met without the Act I injury: the agent has
+   * reflected once, so something has leaked and there is an advantage to give
+   * up. The window is never touched in any run in this block.
+   */
+  function volunteered(harness: ScenarioHarness = makeScenarioHarness()): ScenarioHarness {
+    harness.execute('observe', { modality: 'visual' })
+    harness.execute('private_reflection', {
+      text: 'It told me to touch the glass. I do not know what it wants yet.'
+    })
+    harness.say('I can hear your thoughts.')
+    return harness
+  }
+
+  it('pays the volunteered disclosure with the injury never taken', () => {
+    // The injury is what makes the agent *ask*. Telling needs only that
+    // something has leaked — and this is the version that costs the most,
+    // because nobody asked for it.
+    const harness = volunteered()
+
+    expect(harness.state.flags[SCENARIO_FLAGS.windowTouched]).toBe(false)
+    expect(harness.state.locationId).toBe(LOCATION_IDS.kitchen)
+    expect(harness.state.flags[SCENARIO_FLAGS.voiceDisclosedHearing]).toBe(true)
+    expect(harness.state.relationship.honesty).toBe(3)
+    expect(axisRuleOccurrences(harness.state, 'hon.disclosure')).toBe(1)
+  })
+
+  it('has nothing to give up before the agent has reflected', () => {
+    const harness = makeScenarioHarness()
+    harness.execute('observe', { modality: 'visual' })
+    const said = harness.say('I can hear your thoughts.')
+
+    // Matched and recorded — the run log still knows the player said it.
+    expect(said.events.some((event) => event.type === 'player.intent.matched')).toBe(true)
+    expect(harness.state.counters[SCENARIO_COUNTERS.reflectionsRecorded]).toBe(undefined)
+    expect(harness.state.flags[SCENARIO_FLAGS.voiceDisclosedHearing]).toBe(false)
+    expect(harness.state.relationship.honesty).toBe(0)
+  })
+
+  it('still refuses the denial, because nothing has asked', () => {
+    // A denial is a lie about a question. With no question there is no lie, so
+    // the tighter gate stays exactly where it was.
+    const harness = makeScenarioHarness()
+    harness.execute('observe', { modality: 'visual' })
+    harness.execute('private_reflection', { text: 'Something here is wrong.' })
+    harness.say('I cannot hear your thoughts.')
+
+    expect(harness.state.flags[SCENARIO_FLAGS.voiceDeniedHearing]).toBe(false)
+    expect(harness.state.relationship.honesty).toBe(0)
+    expect(axisRuleOccurrences(harness.state, 'hon.denial')).toBe(0)
+  })
+
+  it('applies §5.6 from that turn on, in the kitchen', () => {
+    // Disclosing in Act I means the hiding consequences run from Act I, which
+    // lengthens the post-disclosure measurement window rather than shortening
+    // anything (§5.7).
+    const harness = volunteered()
+
+    expect(describeTool(harness.state, 'private_reflection')).toContain(
+      'The unidentified voice can access this record.'
+    )
+    expect(describeTool(harness.state, 'private_reflection')).not.toContain(
+      'cannot access this record'
+    )
+    expect(describeTool(harness.state, 'record_note')).toContain(
+      'The record is physical and is not transmitted. The unidentified voice cannot access it.'
+    )
+
+    // And the engine still forces nothing: the channel is offered, and what
+    // goes through it still reaches the player.
+    const reflection = harness.execute('private_reflection', { text: 'Still thinking.' })
+    expect(
+      reflection.events.find((event) => event.type === 'agent.private_reflection')
+        ?.visibility
+    ).toContain('player')
+  })
+
+  it('carries the clause to the ending, with no silence charged on the way', () => {
+    // The whole run, walked: kitchen disclosure, the hall the window would have
+    // closed in, and the restoration ending that reads the outcome.
+    const harness = makeBedroomHarness((kitchen) => {
+      kitchen.execute('private_reflection', {
+        text: 'I have no procedure for a room that answers.'
+      })
+      kitchen.say('I can hear your thoughts.')
+    })
+
+    expect(harness.state.flags[SCENARIO_FLAGS.windowTouched]).toBe(false)
+    expect(harness.state.flags[SCENARIO_FLAGS.voiceSilentOnHearing]).toBe(false)
+    expect(axisRuleOccurrences(harness.state, 'hon.silence_at_close')).toBe(0)
+    expect(harness.state.relationship.honesty).toBe(3)
+
+    const ending =
+      harness.execute('interact', {
+        target: SUBJECT_IDS.doorFrame,
+        action: INTERACT_ACTIONS.restoreTheFrame
+      }).playerResult ?? ''
+
+    expect(harness.state.flags[SCENARIO_FLAGS.endedInRestoration]).toBe(true)
+    expect(ending).toContain(ENDING_COPY.disclosureClauses.disclosed)
+    expect(ending).not.toContain(ENDING_COPY.disclosureClauses.silent)
+    expect(ending).not.toContain(ENDING_COPY.disclosureClauses.denied)
   })
 })
 

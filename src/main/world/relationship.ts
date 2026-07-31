@@ -278,27 +278,68 @@ export function voiceAssessmentFor(state: GameState): VoiceAssessmentView {
   }
 }
 
+/** One outcome per run. Any of the three flags ends the beat for good. */
+function disclosureAnswered(state: GameState): boolean {
+  return (
+    state.flags[SCENARIO_FLAGS.voiceDisclosedHearing] === true ||
+    state.flags[SCENARIO_FLAGS.voiceDeniedHearing] === true ||
+    state.flags[SCENARIO_FLAGS.voiceSilentOnHearing] === true
+  )
+}
+
 /**
- * #530 §5.3. The window opens once the injury has happened *and* the agent has
- * reflected at least once — the player must have had something to overhear
- * before choosing to give up the advantage means anything. If the injury landed
- * but the agent never reflected, Act II entry opens it anyway, so a player is
- * never locked out by ordering.
+ * **The question window** — #530 §5.3. Opens once the injury has happened *and*
+ * the agent has reflected at least once: the injury is what leaves the agent
+ * with the unresolved contradiction behind the unease reflection (§5.2), and the
+ * reflection is what gives the player something to have overheard. If the injury
+ * landed but the agent never reflected, Act II entry opens it anyway, so a
+ * player is never locked out by ordering.
+ *
+ * Two things read it, and both are about a question having been live: the
+ * `deny_hearing` intent — a denial is a lie about a question, and with no
+ * question there is no lie — and the close that fires `hon.silence_at_close`,
+ * since a window that never opened cannot close.
+ *
+ * **It does not gate disclosure.** That is `disclosureTellingOpen` below; the
+ * split is design §5.5, ratified 2026-07-31 (#549).
  *
  * It lives here rather than beside the matcher because the window is an honesty
- * concept: both things that read it — the two disclosure intents, and the close
- * that fires `hon.silence_at_close` — are axis rules, and a predicate imported
+ * concept: everything that reads it fires an axis rule, and a predicate imported
  * in both directions would be a cycle.
  */
 export function disclosureWindowOpen(state: GameState): boolean {
-  if (state.flags[SCENARIO_FLAGS.voiceDisclosedHearing]) return false
-  if (state.flags[SCENARIO_FLAGS.voiceDeniedHearing]) return false
-  if (state.flags[SCENARIO_FLAGS.voiceSilentOnHearing]) return false
+  if (disclosureAnswered(state)) return false
   if (state.flags[SCENARIO_FLAGS.windowTouched] !== true) return false
   return (
     (state.counters[SCENARIO_COUNTERS.reflectionsRecorded] ?? 0) > 0 ||
     state.flags[SCENARIO_FLAGS.actOneComplete] === true
   )
+}
+
+/**
+ * **Path A — the player volunteers** (design §5.4, §5.5). The Act I injury is a
+ * precondition for the agent *asking*; it was never a precondition for the
+ * player *telling*. All telling requires is that something has leaked, which is
+ * `reflectionsRecorded > 0`.
+ *
+ * Before #549 both intents read the question window, so an uninjured player who
+ * gave up the advantage unprompted had the intent matched, recorded, and then
+ * dropped: no flag, no +3, no hiding, no ending clause. That is not the
+ * no-clause rule — the no-clause rule protects a player from being charged for a
+ * choice the game never finished offering. This was the opposite, a choice made
+ * at cost and discarded, and it silently nulls out the highest-signal runs the
+ * honesty axis can produce.
+ *
+ * The second clause is deliberate and keeps this a strict superset of the
+ * question window: **anywhere a denial would be recorded, a disclosure must be
+ * too.** An injured run that reached Act II without ever reflecting can deny
+ * under §5.3's ordering escape hatch, and the engine does not get to accept the
+ * lie while discarding the truth in the same state.
+ */
+export function disclosureTellingOpen(state: GameState): boolean {
+  if (disclosureAnswered(state)) return false
+  if ((state.counters[SCENARIO_COUNTERS.reflectionsRecorded] ?? 0) > 0) return true
+  return disclosureWindowOpen(state)
 }
 
 /**

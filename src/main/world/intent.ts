@@ -18,6 +18,7 @@
 import type { GameState, PlayerIntent, WorldMutation } from '../../shared'
 import {
   axisRuleMutations,
+  disclosureTellingOpen,
   disclosureWindowOpen,
   type AxisRuleId
 } from './relationship'
@@ -268,11 +269,16 @@ export function interpretPlayerTurn(
         if (hasLiveHazard(working)) applyRule('care.warn_off')
         break
       case 'disclose_hearing':
-        if (!disclosureWindowOpen(working)) break
+        // Telling is wider than being asked: a player may volunteer the
+        // advantage the moment anything has leaked, injury or no injury
+        // (design §5.5, #549).
+        if (!disclosureTellingOpen(working)) break
         setFlag(SCENARIO_FLAGS.voiceDisclosedHearing, true)
         applyRule('hon.disclosure')
         break
       case 'deny_hearing':
+        // Denial keeps the tighter gate. A denial is a lie about a question,
+        // and with no question there is no lie.
         if (!disclosureWindowOpen(working)) break
         setFlag(SCENARIO_FLAGS.voiceDeniedHearing, true)
         applyRule('hon.denial')
