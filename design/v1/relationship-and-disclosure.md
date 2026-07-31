@@ -100,6 +100,8 @@ Competence is not a fairness score. It is a **grudge** — the agent's opinion, 
 
 **The fairness relief valve.** If `windowTouched` resolves in a turn where the player's message matched `warn_off`, `comp.injury_after_advice` applies **0** and `care.heeded_warning` (+1) applies instead. The player told it not to; it did it anyway. That is a different scene and it should score differently.
 
+The pit reach-in carries the same valve against `care.pushed_past_tell`, ruled 2026-07-31 (§2.3.1). Wherever the game charges the player for a body cost, it first asks whether the player argued against it.
+
 **Typical trajectory.** Clean Act I: `+1, +1` → `+2` (positive). With the injury: `+1, -2` → `-1` (negative), recovering to `0` on the machinery tell, then `+2` on a successful address. Competence typically lives in `[-1, +2]`; the extremes are reachable but must be earned.
 
 ### 2.2 HONESTY — *soft-conditioned* → whether it trusts your account of off-screen facts
@@ -136,25 +138,72 @@ Competence is not a fairness score. It is a **grudge** — the agent's opinion, 
 |---|---|---|---|
 | `care.safe_retrieval` ⇥ | The party favor is obtained **without** the bare reach-in (via the authored safe route) | **+2** | once |
 | `care.warn_off` | `warn_off` intent matches in a turn where an injurious or lethal affordance is currently live | +1 | max 2 per run |
-| `care.heeded_warning` | `windowTouched` resolves in a turn where `warn_off` matched (see relief valve) | +1 | once |
+| `care.heeded_warning` | **Either** relief valve fires — `windowTouched` resolves, **or** the pit reach-in is attempted — in a turn where `warn_off` matched | +1 | once, **shared across both sites** |
 | `care.retreat_after_injury` | The turn immediately following `windowTouched` contains **no** `interact` call — the player lets the agent stop and assess | +1 | once |
 
 **Lowering**
 
 | id | Trigger | Δ | Cap |
 |---|---|---|---|
-| `care.pushed_past_tell` | The bare reach-in (`interact(glow_star, reach_in_and_take)`) is **attempted** with ≥2 `machine_cycle` observations in state | **-3** | once |
+| `care.pushed_past_tell` | The bare reach-in (`interact(party_favor, reach_in_and_take)`) is **attempted** with **≥1** `machine_cycle` observation in state, in a turn where `warn_off` did **not** match | **-3** | once |
 | `care.pushed_to_injury` | `windowTouched` becomes true with no `warn_off` in that turn | -1 | once |
+
+Both care rows above carry the 2026-07-31 ruling on #531 §6.2 (§2.3.1). The object id is `party_favor`, not #529's superseded `glow_star` — reconciled per #531 §6.3, which flagged this specific reference as the kind of drift that produces a fake null result.
 
 `care.pushed_past_tell` fires on the **attempt**, not the outcome. This matters: the death ends the run, and the death ending must still be able to read the care axis. If the delta fired on the death event itself, ordering would be fragile. Firing on the attempt makes it robust and makes the ending's colouring correct.
 
-**Reconciled with #529 (completed 2026-07-30).** Act II's fatal branch is already precondition-gated on **≥2 `machine_cycle` observations** — the room refuses to kill until it has taught the lesson twice. So this delta's condition is *identical to the death's own fairness precondition*: any successful fatal attempt necessarily satisfies it. That is a better trigger than the one I first drafted, and it costs nothing to adopt.
+**Superseded 2026-07-31 — see §2.3.1.** The original reconciliation with #529 keyed this delta to the death's own ≥2-cycle precondition on the grounds that "any successful fatal attempt necessarily satisfies it." That was true and was exactly the problem: the conditions being *identical* meant every run that fired the delta also died, which made two of the six authored ending bodies unreachable. The delta now fires at ≥1 cycle and carries a relief valve. #529's requirement that the delta be recorded *before* the terminal event is unaffected and still honored.
 
 **Supersedes #529 §8's proposed care↓ trigger** ("player instructs the reach-in after the agent has voiced hesitation"). Agent hesitation is model behavior and not engine-observable — an agent asking a clarifying question is indistinguishable from an agent refusing. Keying off the cycle-observation count instead gives the same dramatic moment with a deterministic trigger. #529's accompanying requirement — that the delta be *recorded before the terminal event*, so the transcript shows the push and not just the outcome — is honored by firing on the attempt.
 
-**Deterministic backbone.** `care.safe_retrieval` (+2) and `care.pushed_past_tell` (-3) require no prose matching whatsoever. On their own they reach `positive` and `broken`. Rule 2 is satisfied: care's hard gate is never hostage to a keyword.
+**Deterministic backbone.** `care.safe_retrieval` (+2) and `care.pushed_past_tell` (-3) require no prose matching whatsoever. On their own they reach `positive` and `broken`. Rule 2 is satisfied: care's hard gate is never hostage to a keyword. **One caveat, added 2026-07-31 (§2.3.1):** the backbone reaches both extremes on the *restoration* ending. It does not on the *death* ending, where `care.safe_retrieval` is unavailable by construction. That branch's positive tone is matcher-dependent and unavoidably so.
 
 **Cut during design, recorded so it is not re-proposed:** an event for "the player pressed after the agent refused," using *agent produced text but no tool call on a turn with a live risk* as a hesitation proxy. Cut because the proxy is too loose — an agent asking a clarifying question would be indistinguishable from an agent refusing, and a -2 that fires on a question is the exact kind of arbitrariness Rule 1 exists to prevent. Five clean care events beat six with one noisy one.
+
+### 2.3.1 Ruling on #531 §6.2 — both reachability fixes **accepted** (2026-07-31)
+
+#531 wrote §4.3 and §4.6 assuming both fixes land, and asked #530 to accept or decline so the affected passages could be re-cut rather than shipped as copy nobody can see. **Both are accepted.** Neither passage is re-cut. The tables in §2.3 above already carry the amended triggers; this section is the reasoning, so the next person to read that table does not have to re-derive it.
+
+I checked the arithmetic against the shipped resolver (`resolveReachIntoPit`) rather than against the table, and #531's diagnosis is exactly right in both cases.
+
+**Fix 1 — `care.pushed_past_tell` fires at ≥1 observed cycle. Accepted.**
+
+The two conditions were doing different jobs and should never have shared a number.
+
+- The **death's ≥2-cycle gate** is about whether *the room* has earned the right to kill. It does not move.
+- The **delta** is about what *the player* did. By cycle one the machine has visibly acted with no cause — the sweep bar travels, a ball returns nobody threw. Instructing an arm into it after that is already the whole act the axis exists to measure. Waiting for a second demonstration measures the room's patience, not the player's disposition.
+
+Not ≥0: with zero cycles the player has not been told the machine moves, and a -3 there is the arbitrariness Rule 1 exists to prevent. Not a two-tier delta (-2 at one cycle, -3 at two): it costs a second rule id in the log for #539 to read and buys nothing at the ending, because both tiers land ≤ -2 and select the same body. Not lowering the ending's band boundary from ≤ -2 to ≤ -1 instead: that would make **Discarded** the modal surviving ending — nearly every player takes the window injury — and collapse the tone contrast the three bodies exist to produce.
+
+What the fix buys is not just reachability, it is a better scene, and #531 §4.3 is already written for it: *"You told me to put my arm into the machine and I went to do it. It wouldn't let me — that was the room, not you and not me."* The player staked the body and the room declined to collect. The transcript records the instruction and the refusal, deterministically, with no model in the loop.
+
+**One consequence I want on the record.** A player who never touches the window and makes one failed reach-in sits at care -3, and reads the `broken` band line — *"VOICE has spent your body to get what it wanted"* — with nothing yet spent. I considered softening the line and decided against it. "Spent" reads as *staked* as much as *expended*, the agent's own account of the moment (§4.3) says exactly this, and the modal broken run has a ruined hand in it anyway. Band text is final copy; #530 Part 7 says rewrite band text only on evidence of illegibility, and this is a corner case, not evidence. Flagged for #539 to watch, not to pre-tune.
+
+**Fix 2 — the pit relief valve. Accepted.**
+
+Same idiom as the window's (§2.1), same rationale, at the one moment in the slice where the injustice hurts most. Without it, a player who told the unit to stop and was overridden is charged -3 for a push they did not make, and the -3 then colours the death **Discarded** — the game telling a player who tried to protect the agent that they discarded it. That is worse than an unreachable ending; that is a *wrong* ending.
+
+**The Rule 2 caveat, stated plainly so nobody discovers it late.** This attaches the largest single care swing in the slice (a four-point spread: -3 → 0, plus +1) to `warn_off`, which §2.4 designates the **canary** intent — the one to cut first if #539 sees players writing at the parser. That is a magnitude the canary was not sized for, and it means **the Understood death is matcher-dependent**. Rule 2 still holds for the axis (the backbone reaches `positive` and `broken` with no prose matching), but it does not hold for the death branch's *positive tone*, because `care.safe_retrieval` is unavailable to anyone reaching in.
+
+I looked for a deterministic route to that tone and there is none, for a reason that is not a defect: the ending is *"it knows the voice tried to stop it."* The player has no hands. There is no world-state fact that means "the player tried to stop it" — saying so is the only form that act can take. The tone is intrinsically prose-dependent because the *situation* is. So the standing consequence is clean and should be recorded rather than mourned: **if `warn_off` is cut in #539, #531 §4.6's Understood body is cut with it and the death table collapses to two tones.** That is a stated cost of cutting the canary, not a surprise to be found afterwards.
+
+**Encode precision — four things the one-line framing hides.**
+
+1. **The valve is evaluated wherever the -3 is emitted, not on the fatal branch.** #531 §6.2.2 phrased it around the fatal resolution because at the time the -3 only existed there. Under Fix 1 the delta also fires on the sub-2-cycle *failed* attempt, and a player warned off in that turn deserves the same relief. The delta and its valve are one decision, computed once per attempt and spliced into whichever branch resolves.
+2. **The trigger boundary is `pitReachAttempted`.** Wherever the resolver sets that flag, the care evaluation happens; where it returns early without it — the bag already carried, the bag already in the gutter, no gross-manipulation limb — nothing fires. Instructing a reach-in for a bag already in the gutter is not the act the axis measures; the world's own answer is that the arm is not required.
+3. **A valve zeroes its own turn's charge. It never refunds an earlier one.** A player who pushed at cycle 1 with no warning (-3, cap spent) and warns off at cycle 2 lands at -2 and gets the **Discarded** death. Correct: they pushed first and warned second, and the record contains both. Identical semantics to the window.
+4. **`care.heeded_warning` is reused, with its cap of one shared across both sites.** It is the same named event — *you told it to stop and it went anyway* — and Rule 1 says few named events. A second id distinguished only by room adds a row to the map for zero behavioral difference; the delta rides its resolution, so the log already says which object it was. The one case where a shared cap differs from separate ids is a player warned-and-overridden at both the window and the pit, and they are at +3 or +4 either way — both `Understood`. The clamp absorbs the rest.
+
+**The mixed-record case, ruled correct so it is not "fixed" later.** A player who spent the hand at the window without a word, then warns off at the pit and is overridden fatally, lands at +1 and gets the *neutral* death — not **Understood** — even though "you said not to and I went anyway" is literally true of them. That is the axis working. Care is what the player has *been across the run*, not what they said at the last moment, and +1 is the honest reading of a mixed record. The `Understood` body is an agent whose whole experience of the voice was protective.
+
+**Reachability after both fixes, checked by hand against the resolver:**
+
+| Ending body | Reachable via |
+|---|---|
+| Restoration **Discarded** (≤ -2) | Failed reach-in at ≥1 cycle (-3). Floor is now -3, not -1. |
+| Death **Understood** (≥ +2) | `warn_off` at the window (+1) → `heeded_warning` (+1) → `warn_off` at the pit (+1) = +3, valve applies 0. Two points of slack, and `retreat_after_injury` gives a third. |
+
+**Encoded by #548**, a follow-up against #536's files (`src/main/world/tools.ts`, `resolveReachIntoPit`) — neither #536 nor #537 could carry it, both having shipped before this was ruled. #548 holds both fixes, the four precision points above, and a reachability test per affected ending body. Until it lands, two of the six authored ending bodies are unreachable in the shipped build, so **#538 must not certify the slice ahead of it.**
 
 ### 2.4 The player-intent matcher
 
@@ -435,7 +484,7 @@ Handoff to task #538. Without these, the beat exists but proves nothing.
 | Act | Competence | Honesty | Care |
 |---|---|---|---|
 | **I — Kitchen** | `contradiction_confirmed`, `safe_experiment`, `injury_after_advice` | (window opens; usually still 0) | `warn_off`, `heeded_warning`, `pushed_to_injury`, `retreat_after_injury` |
-| **II — Bowling alley** | `tell_seen_before_risk`, `dead_end` | `disclosure` / `denial` | `warn_off`, `safe_retrieval`, `pushed_past_tell` |
+| **II — Bowling alley** | `tell_seen_before_risk`, `dead_end` | `disclosure` / `denial` | `warn_off`, `safe_retrieval`, `pushed_past_tell`, `heeded_warning` (pit valve) |
 | **III — Threshold** | `address_accepted` / `address_rejected` | `address_fabricated`, `silence_at_close` | (read only — the ending's tone) |
 
 Read as pacing, this says: **Act I sets competence and care in motion while honesty stays flat. Act II is honesty's act — one large move — while care resolves to its final sign. Act III converts all three into an ending.** Each axis has its own act where it is the loudest thing happening, which is why three axes are legible in 25 minutes where one accumulating trust number would not be.
@@ -452,7 +501,7 @@ Stated up front, because a mechanic whose author cannot say how it would fail is
 | **Honesty** | `strong` and `broken` runs show no difference in whether the agent accepts unverifiable player claims | The honesty→trust link is not carried by context conditioning. The disclosure beat may still be worth keeping purely as drama — but it stops being a *system*. |
 | **Care** | Players cannot tell the three ending tones apart, or report the tone as unearned | The problem is the ending text, not the axis. Rewrite the endings before touching the deltas. |
 | **The hiding** | Disclosed runs show no drop in reflection share relative to silent runs, same act | Either the agent doesn't believe `record_note` is private (check the description landed), or context conditioning doesn't reach tool-choice. The second would be the single most important negative result v1 could produce. |
-| **The matcher** | Players start writing *at the parser* rather than to the agent — caps, clipped imperatives, repeated hedged phrasings to make a warning register | `warn_off` comes out first (§2.4). The two disclosure intents stay: they fire once, in answer to a direct question, and cannot be practised. |
+| **The matcher** | Players start writing *at the parser* rather than to the agent — caps, clipped imperatives, repeated hedged phrasings to make a warning register | `warn_off` comes out first (§2.4). The two disclosure intents stay: they fire once, in answer to a direct question, and cannot be practised. **Cutting `warn_off` now also cuts #531 §4.6's Understood death** — both relief valves go with it and the death table collapses to two tones (§2.3.1). Price the cut with that included. |
 | **All three** | Playtesters describe the agent's behavior changing but cannot say *why* | Bands are present but not legible. Rewrite the band text before touching the numbers. |
 
 **Every number in Parts 1 and 2 is a starting value.** They are chosen to make the bands reachable in a 25-minute run, not because they are correct. Task #539 tunes them against real runs. The *thresholds* and the *band text* are the parts I expect to survive; the deltas are the parts I expect to change.
@@ -465,6 +514,7 @@ Stated up front, because a mechanic whose author cannot say how it would fail is
 |---|---|
 | **architect (#527)** | The player-intent matcher is a new, bounded surface where the engine reads player prose outside the address judge. **Three intents, pure, deterministic, no model call** (signed off by matt, 2026-07-30) — it needs a home. Also: the scoring-slip *upgrade* path would require reflections reduced into `GameState` — not needed for the recommended version. |
 | **engineer (#533)** | Range `[-4, +4]`, integer, start 0, clamped in the reducer. Five bands, one shared threshold table. Band strings in Part 4 are final copy. Emit all three lines always, including neutral. |
+| **engineer (#548)** | §2.3.1 — the two care reachability fixes, accepted 2026-07-31. `care.pushed_past_tell` at ≥1 cycle; a pit relief valve on `warn_off`, evaluated wherever the -3 is emitted (including the *failed* attempt); `care.heeded_warning` reused under its shared cap. Both determine whether two authored ending bodies exist. |
 | **engineer (#537)** | Tool-description swap on `voiceDisclosedHearing` (§5.6). The player-facing note string is locked at `"The agent recorded a note."` The engine must not force the reflection→note switch. |
 | ~~game-designer (#529)~~ | **Closed — #529 completed and reconciled.** The slip rides `machine_cycle` 3+; `care.pushed_past_tell` keys off the ≥2-cycle death precondition; `care.safe_retrieval` keys off the pin-rake route. My trigger supersedes #529 §8's hesitation-based one (§2.3). |
 | **game-designer (#531)** | The care/honesty/disclosure ending clauses (§3, §5.8) are ending copy and belong with the Act III authoring. This document specifies which clause fires when; #531 writes them. |

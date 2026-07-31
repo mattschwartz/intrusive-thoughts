@@ -749,6 +749,8 @@ Naming, not shaping — shapes are #527's.
 
 ## 6.2 Defect found in #530: two of the six authored endings are unreachable
 
+> **RULED 2026-07-31 (#545): both fixes accepted.** The canon is #530 §2.3 and its ruling at **§2.3.1**, which carries the amended trigger table, four points of encode precision this section's one-line framing hides, and the standing consequence that cutting the `warn_off` canary also cuts §4.6's **Understood** body. Neither §4.3 nor §4.6 is re-cut; both play as written. **Encoded by #548**, a follow-up against #536's files — #536 and #537 had both shipped by the time this was ruled. The rest of this section is retained as the diagnosis that produced the fixes.
+
 Working through the care arithmetic to write the copy surfaced two reachability holes. Both are small, deterministic fixes in #530's delta table, and both directly determine whether passages in §4.3 and §4.6 are text anybody ever sees.
 
 ### 6.2.1 The **Discarded** restoration ending cannot be reached
@@ -778,6 +780,8 @@ But the tone #530 authored for care ≥ +2 at the death is *"it knows the voice 
 Same idiom, same rationale, same shape, one condition. It makes all three death tones reachable, it makes the -3 fair, and it produces the best passage in the death ending by letting the player's warning be on the record when the agent overrides it.
 
 **Both fixes are #530's to accept and #536's/#537's to encode. I have written §4.3 and §4.6 assuming both land.** If either is declined, say so and I will re-cut the affected passage rather than ship copy nobody can see.
+
+**Both accepted, #545, 2026-07-31 — see the note at the head of §6.2.** Two amendments to the requests as written, both in #530 §2.3.1: the pit valve is evaluated wherever `care.pushed_past_tell` is emitted (which under fix 1 includes the *failed* attempt, not only the fatal branch), and `care.heeded_warning` is reused at the pit under a cap of one shared with the window rather than as a second rule id.
 
 ## 6.3 Handoff: canonical-name drift between #528 and #529
 
@@ -812,7 +816,7 @@ I would rather know the price than guess it. If the price is real, tell me and I
 | To | What |
 |---|---|
 | **#527 architect** | §6.1 — the Act III ending is a terminal `interact`, not a terminal traversal. `ThresholdDefinition.terminal` goes unused. One extra room in the graph. |
-| **#530 relationship** | §6.2 — two reachability fixes: `pushed_past_tell` at ≥1 cycle; a pit relief valve on `warn_off`. Both determine whether authored endings exist. |
+| ~~**#530 relationship**~~ | **Closed — both accepted, #545, 2026-07-31.** `pushed_past_tell` at ≥1 cycle; a pit relief valve on `warn_off`. Canon and encode precision live in #530 §2.3.1. |
 | **#534 gate** | §2.4 bounce copy is final; the verdict must carry the missing dimensions and `effectiveAnchorIds` for the read-back (#527 A1). The zero read-back must not branch on `citedAnchorIds`. |
 | **#535 judge** | Nothing new. #528 §9 is the rubric; §2.4's zero-resolved read-back is what an *ungrounded* reference must produce — invented or merely never-gathered, the same string either way. |
 | **#536 encode I–II** | §1.2 descriptions, §1.4 interact table, §6.3 name substitution. |
